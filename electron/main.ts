@@ -2,18 +2,12 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { mkdir, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import projectNameRules = require("../src/shared/project-name.cjs");
 import type { ProjectSummary } from "../src/shared/types.js";
 
+const { validateProjectName } = projectNameRules;
 const isDevelopment = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
-
-function assertSafeProjectName(value: string): string {
-  const name = value.trim();
-  if (!name || name.length > 64 || /[<>:"/\\|?*\x00-\x1f]/.test(name) || name === "." || name === "..") {
-    throw new Error("Project name must be 1–64 characters and cannot contain filesystem-reserved characters.");
-  }
-  return name;
-}
 
 async function summarizeProject(projectPath: string): Promise<ProjectSummary> {
   const resolved = path.resolve(projectPath);
@@ -58,16 +52,15 @@ function createWindow(): void {
     void mainWindow.loadURL("http://127.0.0.1:5173");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    void mainWindow.loadURL(pathToFileURL(path.join(__dirname, "../renderer/index.html")).toString());
+    void mainWindow.loadURL(pathToFileURL(path.join(__dirname, "renderer/index.html")).toString());
   }
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://")) void shell.openExternal(url);
-    return { action: "deny" };
-  });
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    const allowed = isDevelopment && url.startsWith("http://127.0.0.1:5173");
-    if (!allowed && !url.startsWith("file://")) event.preventDefault();
+    const allowed = isDevelopment
+      ? url.startsWith("http://127.0.0.1:5173")
+      : url === pathToFileURL(path.join(__dirname, "renderer/index.html")).toString();
+    if (!allowed) event.preventDefault();
   });
 }
 
@@ -79,8 +72,7 @@ ipcMain.handle("app:get-info", () => ({
 }));
 
 ipcMain.handle("project:create", async (_event, rawName: unknown) => {
-  if (typeof rawName !== "string") throw new Error("A project name is required.");
-  const name = assertSafeProjectName(rawName);
+  const name = validateProjectName(rawName);
   const parent = await dialog.showOpenDialog({
     title: "Choose where to create your game project",
     properties: ["openDirectory", "createDirectory"],
@@ -88,7 +80,6 @@ ipcMain.handle("project:create", async (_event, rawName: unknown) => {
   if (parent.canceled || !parent.filePaths[0]) return null;
   const projectPath = path.join(parent.filePaths[0], name);
   await mkdir(projectPath, { recursive: false });
-  await mkdir(path.join(projectPath, "GameForge"), { recursive: true });
   await mkdir(path.join(projectPath, "GameForge", "Notes"), { recursive: true });
   return summarizeProject(projectPath);
 });

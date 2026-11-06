@@ -1,45 +1,48 @@
 # MMD GameForge
 
-**An independent AI-powered game creation studio for Unreal Engine.**
+**An independent, local-first game creation studio for Unreal Engine, with proprietary AI models trained from scratch.**
 
-MMD GameForge is a Windows-first desktop application focused on helping creators design, build, inspect, and iteratively improve Unreal Engine games through a dedicated game-development workspace and conversational creative agent.
+MMD GameForge is a Windows-first desktop application for organizing game projects and, over time, designing, building, inspecting, and iteratively improving Unreal Engine games through a dedicated creative workspace.
 
 ## Core principles
 
-- **AI models built from scratch:** MMD's first-party model weights, training pipelines, datasets, evaluation, and inference systems are developed as part of this project. The project does not rely on pretrained third-party models as its foundation.
-- **Local-first:** The long-term target is local execution and user-controlled project data.
-- **Unreal Engine focused:** Game creation workflows, assets, code, scenes, and iteration are designed around Unreal Engine.
-- **Human-directed iteration:** Creators can request changes in natural language, review proposed actions, and inspect results.
-- **Modular research:** Language, code, vision, image, 3D, and audio capabilities are separate research tracks coordinated by the MMD AI Core.
+- **First-party AI:** MMD model weights are to be initialized and trained from scratch. Pretrained third-party model weights and hosted AI APIs are not the foundation of this product.
+- **Local-first:** project files and future model workflows are designed around user-controlled local storage and execution.
+- **Unreal-focused:** project workflows, assets, code, scenes, and iteration are designed around Unreal Engine.
+- **Human-directed:** users review proposed actions and remain in control of project changes.
+- **Honest capability reporting:** planned modules are identified as in development; the application does not claim model inference or Unreal integration before those systems exist.
 
-## Project status
+## Current status
 
-**Early planning / foundation stage.** The repository currently contains project documentation and initial development conventions. No production AI model or Unreal integration is claimed to exist yet.
+**Phase 02 — Desktop foundation (in progress).**
 
-## Planned capability areas
+The repository now includes an Electron + TypeScript desktop shell with:
+- Dark studio interface and module navigation.
+- Dashboard and recent-project list.
+- Create a local project workspace after choosing its parent folder.
+- Open an existing project directory and inspect a read-only top-level file snapshot.
+- Typed, narrow IPC bridge with context isolation and renderer sandboxing.
+- Type-checking, automated project-name tests, and Windows/Ubuntu CI workflow.
 
-| Area | Intended responsibility |
-| --- | --- |
-| MMD AI Core | Model runtime, training orchestration, task planning, memory, and coordination |
-| MMD Language | First-party language model research and training |
-| MMD Code | Game-code and Unreal-specific programming assistance |
-| MMD Vision | Image and scene understanding |
-| MMD Image | First-party image-generation research |
-| MMD 3D | First-party 3D asset-generation research |
-| MMD Audio | First-party audio-generation research |
-| MMD Creative Agent | User-directed planning, tool execution, validation, and iteration |
-| Unreal Bridge | Controlled integration with Unreal Engine projects |
+World editing, code generation, asset processing, AI inference/training, and Unreal Engine integration are future phases and are not represented as working features yet.
 
-## Independence and dependencies
+## Quick start
 
-The goal is to train MMD's own models from random initialization rather than starting from downloaded pretrained model weights. General-purpose development tools, programming languages, compilers, mathematical libraries, and Unreal Engine may be used. Any dependency that contains pretrained model weights must be reviewed and explicitly excluded from the first-party model pipeline.
+Requirements: Node.js 24+, npm, and Git.
 
-Training frontier-scale models is not realistic on every developer workstation. Development will therefore begin with reproducible small-scale experiments and scale requirements documented honestly as the project evolves.
+```powershell
+git clone https://github.com/pctaha501-create/MMD-GameForge.git
+cd MMD-GameForge
+npm install
+npm run dev
+```
 
-## Development
+See [Development Guide](docs/DEVELOPMENT.md) for quality checks and Windows packaging. See [Architecture](docs/ARCHITECTURE.md), [Roadmap](docs/ROADMAP.md), and [AI from-scratch policy](docs/AI_FROM_SCRATCH_POLICY.md) for the engineering direction.
 
-The initial implementation plan and architecture will be documented before major application code is introduced.
+## Hardware and research reality
+
+The desktop shell can run on ordinary Windows development hardware. Training frontier-scale language, vision, 3D, or audio models is not realistic on every developer workstation. The model program will begin with reproducible small-scale experiments, explicit dataset provenance, evaluation, and documented scaling requirements.
 
 ## License
 
-No license has been selected yet. Until a license is added, standard copyright restrictions apply; do not assume this repository grants permission to reuse its contents.
+No license has been selected yet. Until a license is added, standard copyright restrictions apply.
