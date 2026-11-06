@@ -1,44 +1,45 @@
 # MMD GameForge
 
-**AI-Powered Game Creation Studio**
+**An independent AI-powered game creation studio for Unreal Engine.**
 
-MMD GameForge is a dedicated game-development environment focused on creating and iterating Unreal Engine projects with a proprietary AI system designed and trained by the MMD team.
+MMD GameForge is a Windows-first desktop application focused on helping creators design, build, inspect, and iteratively improve Unreal Engine games through a dedicated game-development workspace and conversational creative agent.
 
 ## Core principles
 
-- **AI models built from scratch:** MMD's first-party model architectures, tokenizers, datasets, training pipelines, evaluation suites, and inference runtimes are developed as part of this project.
-- **No pretrained model weights:** The core product must not depend on downloaded, fine-tuned, distilled, or otherwise pretrained third-party AI model weights.
-- **Local-first execution:** The long-term target is local operation, with hardware-aware model sizes and optional support for stronger local machines.
-- **Game-development focus:** The product is purpose-built for Unreal Engine workflows, not a general-purpose chatbot.
-- **Human-directed iteration:** Users can request changes in natural language, inspect proposed results, approve them, and iterate.
-- **Clear separation of integrations:** Any future optional external provider or third-party model connector must remain isolated, explicitly opt-in, and must never become a dependency of MMD's own AI core.
+- **AI models built from scratch:** MMD's first-party model weights, training pipelines, datasets, evaluation, and inference systems are developed as part of this project. The project does not rely on pretrained third-party models as its foundation.
+- **Local-first:** The long-term target is local execution and user-controlled project data.
+- **Unreal Engine focused:** Game creation workflows, assets, code, scenes, and iteration are designed around Unreal Engine.
+- **Human-directed iteration:** Creators can request changes in natural language, review proposed actions, and inspect results.
+- **Modular research:** Language, code, vision, image, 3D, and audio capabilities are separate research tracks coordinated by the MMD AI Core.
 
-## Planned capabilities
+## Project status
 
-- Project-aware AI assistant for Unreal Engine
-- Game design, gameplay systems, and level planning
-- Code and Blueprint assistance
-- Image understanding and visual asset generation
-- Character, environment, and 3D asset workflows
-- Audio workflows for games
-- Project inspection, validation, and iterative changes
-- A dedicated training lab for MMD's models
+**Early planning / foundation stage.** The repository currently contains project documentation and initial development conventions. No production AI model or Unreal integration is claimed to exist yet.
 
-## Development status
+## Planned capability areas
 
-**Stage:** Project foundation and technical planning.
+| Area | Intended responsibility |
+| --- | --- |
+| MMD AI Core | Model runtime, training orchestration, task planning, memory, and coordination |
+| MMD Language | First-party language model research and training |
+| MMD Code | Game-code and Unreal-specific programming assistance |
+| MMD Vision | Image and scene understanding |
+| MMD Image | First-party image-generation research |
+| MMD 3D | First-party 3D asset-generation research |
+| MMD Audio | First-party audio-generation research |
+| MMD Creative Agent | User-directed planning, tool execution, validation, and iteration |
+| Unreal Bridge | Controlled integration with Unreal Engine projects |
 
-The repository does not yet contain a working AI model, Unreal integration, or production application. These will be implemented and validated incrementally. The current interface preview is a design prototype, not a functional game editor.
+## Independence and dependencies
 
-## Documentation
+The goal is to train MMD's own models from random initialization rather than starting from downloaded pretrained model weights. General-purpose development tools, programming languages, compilers, mathematical libraries, and Unreal Engine may be used. Any dependency that contains pretrained model weights must be reviewed and explicitly excluded from the first-party model pipeline.
 
-- [Project vision](docs/PROJECT_VISION.md)
-- [AI-from-scratch policy](docs/AI_FROM_SCRATCH_POLICY.md)
+Training frontier-scale models is not realistic on every developer workstation. Development will therefore begin with reproducible small-scale experiments and scale requirements documented honestly as the project evolves.
 
-## Important constraints
+## Development
 
-Training frontier-scale language, image, audio, or 3D models requires substantial datasets and compute. Development will begin with small, independently initialized models and measurable experiments, then scale when suitable hardware and data are available. No pretrained model will be silently substituted to make a feature appear complete.
+The initial implementation plan and architecture will be documented before major application code is introduced.
 
-## Repository policy
+## License
 
-Do not commit secrets, API keys, private datasets, user projects, or large model checkpoints. Store model artifacts outside Git and document reproducible training and evaluation procedures.
+No license has been selected yet. Until a license is added, standard copyright restrictions apply; do not assume this repository grants permission to reuse its contents.
