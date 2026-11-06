@@ -1,5 +1,6 @@
 import "./styles.css";
 import type { ProjectSummary } from "../shared/types.js";
+import { renderProfessional, bindProfessional } from "./professional.js";
 
 type View = "dashboard" | "projects" | "world" | "code" | "assets" | "ai" | "training" | "settings";
 const icons: Record<string, string> = {
@@ -132,6 +133,7 @@ function projectView(): string {
   <div class="footnote"><span>i</span> FILES ARE ONLY LISTED HERE. GAMEFORGE DOES NOT MODIFY OR DELETE YOUR EXISTING PROJECT CONTENTS.</div>`;
 }
 function moduleView(view: Exclude<View, "dashboard" | "projects">): string {
+  if (["world", "code", "assets", "settings"].includes(view)) return renderProfessional(view as "world" | "code" | "assets" | "settings", activeProject);
   const data = {
     world: ["WORLD BUILDER", "Shape the world.", "A dedicated space for level planning, scene organization, and environment workflows.", "Scene graph and Unreal level tooling will connect here in a later integration phase.", "cube", "WORLD PIPELINE"],
     code: ["CODE STUDIO", "Build the logic.", "A focused home for gameplay systems, scripts, and Unreal C++ workflows.", "The editor and project-aware code tools are planned. No source files are generated in this foundation build.", "code", "DEVELOPMENT PIPELINE"],
@@ -145,7 +147,6 @@ function moduleView(view: Exclude<View, "dashboard" | "projects">): string {
 function render(): void {
   let content = currentView === "dashboard" ? dashboard()
     : currentView === "projects" ? projectsView()
-    : currentView === "world" && activeProject ? projectView()
     : currentView === "world" ? moduleView("world")
     : currentView === "code" ? moduleView("code")
     : currentView === "assets" ? moduleView("assets")
@@ -162,6 +163,7 @@ function bindShellEvents(): void {
   document.querySelector("#refresh-project")?.addEventListener("click", () => void refreshProject());
   document.querySelector("#search-button")?.addEventListener("click", () => notify("Search will be connected to your project index in a later phase."));
   document.querySelector(".sidebar-collapse")?.addEventListener("click", () => document.querySelector(".app-shell")?.classList.toggle("sidebar-compact"));
+  if (["world", "code", "assets", "settings"].includes(currentView)) void bindProfessional(currentView as "world" | "code" | "assets" | "settings", activeProject, notify);
 }
 function showCreateModal(): void {
   const root = document.querySelector<HTMLDivElement>("#modal-root")!;

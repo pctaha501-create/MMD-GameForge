@@ -23,6 +23,16 @@ export interface DesktopAPI {
   createProject(name: string): Promise<ProjectSummary | null>;
   openProject(): Promise<ProjectSummary | null>;
   inspectProject(projectPath: string): Promise<ProjectSummary>;
+  listProjectFiles(projectPath: string): Promise<ProjectFileNode[]>;
+  readProjectFile(projectPath: string, relativePath: string): Promise<{ content: string; size: number }>;
+  writeProjectFile(projectPath: string, relativePath: string, content: string): Promise<{ saved: boolean }>;
+  listProjectAssets(projectPath: string): Promise<ProjectFileNode[]>;
+  importAssets(projectPath: string): Promise<string[]>;
+  revealPath(projectPath: string, relativePath?: string): Promise<boolean>;
+  getSettings(): Promise<StudioSettings>;
+  saveSettings(settings: StudioSettings): Promise<StudioSettings>;
+  detectUnreal(projectPath: string): Promise<UnrealStatus>;
+  launchUnreal(projectFile: string, editorPath?: string): Promise<boolean>;
 }
 
 declare global {
@@ -30,3 +40,7 @@ declare global {
     gameForge: DesktopAPI;
   }
 }
+
+export interface ProjectFileNode { name: string; path: string; kind: "file" | "folder"; size: number; extension: string; }
+export interface UnrealStatus { installed: boolean; editorPath: string | null; projectFile: string | null; }
+export interface StudioSettings { editorFontSize?: number; wordWrap?: boolean; confirmExternal?: boolean; unrealEditorPath?: string; }
