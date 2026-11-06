@@ -31,5 +31,17 @@ jobs:
         run: npm run typecheck
       - name: Run tests
         run: npm test
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: npm run dist
       - name: Build desktop application
+        if: runner.os != 'Windows'
         run: npm run build
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmd-gameforge-windows-x64
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 14
