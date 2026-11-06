@@ -104,7 +104,7 @@ ipcMain.handle("project:inspect", async (_event, projectPath: unknown) => {
 
 const ignoredDirectories = new Set([".git", "node_modules", "Binaries", "Intermediate", "Saved", "DerivedDataCache", ".vs"]);
 const textExtensions = new Set(["ts","tsx","js","jsx","mjs","cjs","json","jsonc","md","txt","html","css","scss","xml","yml","yaml","ini","cfg","uproject","uplugin","h","hpp","c","cc","cpp","cs","py","bat","ps1","sh","toml","cmake","log","csv","svg"]);
-const assetExtensions = new Set(["uasset","umap","fbx","obj","gltf","glb","png","jpg","jpeg","webp","tga","exr","hdr","wav","mp3","ogg","flac","mp4","mov","ttf","otf","mat","blend"]);
+const assetExtensions = new Set(["uasset","umap","fbx","obj","gltf","glb","stl","mtl","bin","png","jpg","jpeg","webp","tga","exr","hdr","wav","mp3","ogg","flac","mp4","mov","ttf","otf","mat","blend"]);
 function inside(root: string, target: string): boolean { const rel = path.relative(root, target); return rel === "" || (!rel.startsWith(`..${path.sep}`) && rel !== ".." && !path.isAbsolute(rel)); }
 async function safeProjectFile(projectPath: unknown, relativePath: unknown): Promise<{ root: string; target: string }> {
   if (typeof projectPath !== "string" || !path.isAbsolute(projectPath) || typeof relativePath !== "string" || !relativePath || path.isAbsolute(relativePath)) throw new Error("Invalid project file path.");
@@ -178,6 +178,35 @@ ipcMain.handle("project:import-assets", async (_event, projectPath: unknown) => 
   for (const source of selected.filePaths) { const base = path.basename(source); let target = path.join(destination, base); const ext = path.extname(base), stem = path.basename(base, ext); let n = 1; while (true) { try { await access(target); target = path.join(destination, `${stem}_${n++}${ext}`); } catch { break; } } await copyFile(source, target); imported.push(path.relative(root, target).split(path.sep).join("/")); }
   return imported;
 });
+
+ipcMain.handle("project:read-asset", async (_event, projectPath: unknown, relativePath: unknown) => {
+  const { target } = await safeProjectFile(projectPath, relativePath); const extension = path.extname(target).slice(1).toLowerCase();
+  if (!["glb","gltf","obj","fbx","stl","mtl","bin","png","jpg","jpeg","webp","tga"].includes(extension)) throw new Error("Unsupported 3D asset or texture format.");
+  const info = await stat(target); if (info.size > 100 * 1024 * 1024) throw new Error("Asset exceeds the 100 MB import limit.");
+  return new Uint8Array(await readFile(target));
+});
+ipcMain.handle("scene:save", async (_event, projectPath: unknown, sceneName: unknown, content: unknown) => {
+  if (typeof projectPath !== "string" || !path.isAbsolute(projectPath)) throw new Error("Invalid project path.");
+  if (typeof sceneName !== "string" || !/^[\p{L}\p{N}_ -]{1,64}$/u.test(sceneName.trim())) throw new Error("Scene name must be 1–64 letters, numbers, spaces, underscores or hyphens.");
+  if (typeof content !== "string" || content.length > 25 * 1024 * 1024) throw new Error("Scene data exceeds the 25 MB limit.");
+  const parsed = JSON.parse(content) as { object?: { type?: string; children?: unknown[] } };
+  if (parsed?.object?.type !== "Group" || !Array.isArray(parsed.object.children)) throw new Error("Invalid GameForge scene document.");
+  const root = await realpath(projectPath); const folder = path.join(root, "GameForge", "Scenes"); await mkdir(folder, { recursive: true });
+  const safeName = sceneName.trim(); const file = path.join(folder, `${safeName}.mmdscene.json`);
+  await writeFile(file, content, "utf8"); return { path: path.relative(root, file).split(path.sep).join("/") };
+});
+ipcMain.handle("scene:open", async (_event, projectPath: unknown) => {
+  if (typeof projectPath !== "string" || !path.isAbsolute(projectPath)) throw new Error("Invalid project path.");
+  const root = await realpath(projectPath); const folder = path.join(root, "GameForge", "Scenes"); await mkdir(folder, { recursive: true });
+  const selected = await dialog.showOpenDialog({ title: "Open GameForge scene", defaultPath: folder, properties: ["openFile"], filters: [{ name: "GameForge scenes", extensions: ["json"] }] });
+  if (selected.canceled || !selected.filePaths[0]) return null;
+  const target = await realpath(selected.filePaths[0]); if (!inside(root, target) || !target.toLowerCase().endsWith(".mmdscene.json")) throw new Error("Choose a .mmdscene.json file inside this project.");
+  const info = await stat(target); if (info.size > 25 * 1024 * 1024) throw new Error("Scene file exceeds the 25 MB limit.");
+  const content = await readFile(target, "utf8"); const parsed = JSON.parse(content) as { object?: { type?: string; children?: unknown[] } };
+  if (parsed?.object?.type !== "Group" || !Array.isArray(parsed.object.children)) throw new Error("This file is not a valid GameForge scene.");
+  return { content, path: path.relative(root, target).split(path.sep).join("/") };
+});
+
 ipcMain.handle("project:reveal", async (_event, projectPath: unknown, relativePath?: unknown) => {
   if (typeof projectPath !== "string" || !path.isAbsolute(projectPath)) throw new Error("Invalid project path.");
   if (typeof relativePath === "string" && relativePath) { const { target } = await safeProjectFile(projectPath, relativePath); shell.showItemInFolder(target); }

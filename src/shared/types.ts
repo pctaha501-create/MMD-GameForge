@@ -28,6 +28,9 @@ export interface DesktopAPI {
   writeProjectFile(projectPath: string, relativePath: string, content: string): Promise<{ saved: boolean }>;
   listProjectAssets(projectPath: string): Promise<ProjectFileNode[]>;
   importAssets(projectPath: string): Promise<string[]>;
+  readProjectAsset(projectPath: string, relativePath: string): Promise<Uint8Array>;
+  saveScene(projectPath: string, sceneName: string, content: string): Promise<{ path: string }>;
+  openScene(projectPath: string): Promise<{ content: string; path: string } | null>;
   revealPath(projectPath: string, relativePath?: string): Promise<boolean>;
   getSettings(): Promise<StudioSettings>;
   saveSettings(settings: StudioSettings): Promise<StudioSettings>;
