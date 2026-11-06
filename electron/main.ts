@@ -52,14 +52,14 @@ function createWindow(): void {
     void mainWindow.loadURL("http://127.0.0.1:5173");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    void mainWindow.loadURL(pathToFileURL(path.join(__dirname, "renderer/index.html")).toString());
+    void mainWindow.loadURL(pathToFileURL(path.join(__dirname, "../renderer/index.html")).toString());
   }
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event, url) => {
     const allowed = isDevelopment
       ? url.startsWith("http://127.0.0.1:5173")
-      : url === pathToFileURL(path.join(__dirname, "renderer/index.html")).toString();
+      : url === pathToFileURL(path.join(__dirname, "../renderer/index.html")).toString();
     if (!allowed) event.preventDefault();
   });
 }
