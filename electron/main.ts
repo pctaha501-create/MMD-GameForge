@@ -114,7 +114,7 @@ async function safeProjectFile(projectPath: unknown, relativePath: unknown): Pro
   return { root, target: actual };
 }
 async function walkProject(root: string, folders: string[], depth = 0): Promise<ProjectFileNode[]> {
-  if (depth > 5 || folders.length > 2500) return folders;
+  if (depth > 5 || folders.length > 2500) return [];
   const dir = folders.length ? path.join(root, ...folders.map(x => x.split("/")).flat()) : root;
   const out: ProjectFileNode[] = [];
   let entries; try { entries = await readdir(dir, { withFileTypes: true }); } catch { return out; }
