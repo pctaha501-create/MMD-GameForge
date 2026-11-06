@@ -1,0 +1,38 @@
+{
+  "name": "mmd-gameforge",
+  "version": "0.2.0",
+  "private": true,
+  "description": "MMD GameForge — a local-first Unreal Engine game creation studio with first-party AI models trained from scratch.",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on tcp:5173 dist/main/main.js && electron .\"",
+    "build": "tsc -p tsconfig.electron.json && vite build",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.electron.json",
+    "test": "node --test",
+    "dist": "npm run typecheck && npm run test && npm run build && electron-builder --win nsis",
+    "dist:dir": "npm run typecheck && npm run test && npm run build && electron-builder --dir"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.1",
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "studio.mmd.gameforge",
+    "productName": "MMD GameForge",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "package.json"],
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
