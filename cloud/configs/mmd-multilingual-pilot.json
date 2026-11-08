@@ -1,0 +1,70 @@
+{
+  "schema_version": "mct.model-config.v1",
+  "model_family": "MMD-Multilingual-Base",
+  "stage": "pilot",
+  "description": "Small from-scratch decoder-only Transformer configuration for measuring cloud notebook feasibility. Not a production model-size claim.",
+  "architecture": {
+    "type": "decoder_only_transformer",
+    "vocab_size": 16000,
+    "max_sequence_length": 512,
+    "hidden_size": 384,
+    "num_layers": 6,
+    "num_attention_heads": 6,
+    "feed_forward_multiplier": 4,
+    "dropout": 0.1,
+    "tie_word_embeddings": true
+  },
+  "tokenizer": {
+    "type": "byte_level_bpe",
+    "training_from_scratch": true,
+    "target_vocab_size": 16000,
+    "normalization": "unicode_nfc",
+    "languages": [
+      "fa",
+      "en",
+      "de",
+      "fr",
+      "es",
+      "ar",
+      "zh",
+      "hi"
+    ]
+  },
+  "initialization": {
+    "weights": "random",
+    "method": "architecture_defined",
+    "seed": 20261108
+  },
+  "training": {
+    "objective": "causal_language_modeling_next_token_prediction",
+    "optimizer": "adamw",
+    "learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "warmup_steps": 200,
+    "max_steps": 2000,
+    "micro_batch_size": 2,
+    "gradient_accumulation_steps": 16,
+    "gradient_clipping": 1,
+    "precision": "auto",
+    "checkpoint_interval_steps": 100,
+    "evaluation_interval_steps": 100,
+    "resume_from_checkpoint": true
+  },
+  "data": {
+    "require_license_record": true,
+    "require_provenance_record": true,
+    "deduplicate": true,
+    "split": [
+      "train",
+      "validation",
+      "test"
+    ],
+    "language_balance": "measure_before_sampling"
+  },
+  "resource_policy": {
+    "target": "free_compliant_cloud_notebooks",
+    "paid_fallback": false,
+    "user_started_sessions_only": true,
+    "save_checkpoint_before_runtime_limit": true
+  }
+}

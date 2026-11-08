@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pctaha501-create/MMD-GameForge/blob/main/cloud/contracts/training-job.schema.json",
+  "title": "MMD Cloud Training Job",
+  "description": "Provider-neutral, reproducible job manifest. It describes work; it does not authorize quota bypass or unattended provider execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "model",
+    "dataset",
+    "training",
+    "provider_policy",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "mct.training-job.v1"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,79}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "config_path",
+        "initialization"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "config_path": {
+          "type": "string",
+          "pattern": "^cloud/configs/[a-zA-Z0-9._/-]+\\\\.json$"
+        },
+        "initialization": {
+          "const": "random"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "revision",
+        "license",
+        "provenance_path"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "format": "uri"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "type": "string",
+          "minLength": 2
+        },
+        "provenance_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "training": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_steps",
+        "checkpoint_interval_steps",
+        "resume"
+      ],
+      "properties": {
+        "max_steps": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "checkpoint_interval_steps": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resume": {
+          "type": "boolean"
+        },
+        "precision": {
+          "enum": [
+            "fp32",
+            "fp16",
+            "bf16",
+            "auto"
+          ]
+        },
+        "max_runtime_minutes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "provider_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_providers",
+        "user_started",
+        "allow_paid_fallback"
+      ],
+      "properties": {
+        "allowed_providers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "kaggle",
+              "colab",
+              "huggingface"
+            ]
+          }
+        },
+        "user_started": {
+          "const": true
+        },
+        "allow_paid_fallback": {
+          "const": false
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint_manifest_path",
+        "metrics_path"
+      ],
+      "properties": {
+        "checkpoint_manifest_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metrics_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "public_model_repo": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
