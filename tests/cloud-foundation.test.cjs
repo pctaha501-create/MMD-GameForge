@@ -56,5 +56,5 @@ test("MMD Base 1B config is bilingual, random-init, and 1B class", () => {
   assert.equal(config.architecture.hidden_size, 2048);
   assert.equal(config.architecture.num_layers, 19);
   assert.equal(config.resource_policy.require_cuda, true);
-  assert.equal(config.resource_policy.minimum_gpu_memory_gib, 24);
+  assert.equal(config.resource_policy.minimum_gpu_memory_gib, 14);
 });

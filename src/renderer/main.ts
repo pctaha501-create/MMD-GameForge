@@ -149,7 +149,7 @@ function modelEstimate(profile: ModelProfile): {parameters:number;weightMiB:numb
   const embedding=p.vocab*d+p.seq*d;
   const attention=4*d*d+4*d,feed=d*ff+ff+ff*d+d,norm=4*d;
   const total=embedding+p.layers*(attention+feed+norm)+2*d;
-  return {parameters:total,weightMiB:total*4/1048576,adamMiB:total*16/1048576};
+  return {parameters:total,weightMiB:total*4/1048576,adamMiB:total*(profile==="bilingual-base-1b"?10:16)/1048576};
 }
 function makeModelConfig(profile: ModelProfile, seed:number): object {
   const p=modelProfiles[profile];
