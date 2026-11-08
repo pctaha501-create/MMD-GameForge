@@ -34,7 +34,11 @@ See [MCT_08_SAFE_TOOL_ROUTER.md](./MCT_08_SAFE_TOOL_ROUTER.md).
 
 See [MCT_09_TASK_BENCHMARKS.md](./MCT_09_TASK_BENCHMARKS.md). Adds held-out task/language reporting and human-reviewable samples. Keyword-based pass rates are only smoke tests, not production certification.
 
-## MCT-10 — Model quality and Unreal end-to-end acceptance
+## MCT-10 — Dataset source review and approval
+
+See [MCT_10_DATASET_SOURCE_REVIEW.md](./MCT_10_DATASET_SOURCE_REVIEW.md). Public dataset candidates are reviewed for target-language coverage, document-level rights, provenance and practical size. No source is ingested until its scope and license are approved.
+
+## MCT-11 — Model quality and Unreal end-to-end acceptance
 
 Build larger curated benchmarks, compile generated Unreal C++ in controlled fixtures, verify project edits in disposable projects, and gate model releases on measured quality, safety and human review.
 
