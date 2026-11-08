@@ -1,22 +1,22 @@
 ## Phase 02 — Desktop workspace
 
-See [PHASE_02_WORKSPACE.md](./PHASE_02_WORKSPACE.md) for the desktop workspace implementation and its explicit boundaries. Production acceptance remains subject to CI and on-device validation.
+See [PHASE_02_WORKSPACE.md](./PHASE_02_WORKSPACE.md). Production acceptance remains subject to CI and on-device validation.
 
 ## MCT-01 — MMD Cloud Training foundation
 
-See [MMD_CLOUD_TRAINING_ARCHITECTURE.md](./MMD_CLOUD_TRAINING_ARCHITECTURE.md). Establishes provider-neutral job/checkpoint contracts, multilingual pilot configuration, provider-compliance rules, and public-repository security guidance.
+See [MMD_CLOUD_TRAINING_ARCHITECTURE.md](./MMD_CLOUD_TRAINING_ARCHITECTURE.md).
 
 ## MCT-02 — Executable cloud training runner
 
-See [MCT_02_CLOUD_RUNNER.md](./MCT_02_CLOUD_RUNNER.md). Adds preflight validation, a from-scratch tokenizer and decoder-only Transformer trainer, resumable checkpoints with provenance hashes, Kaggle/Colab notebook entrypoints, and automated Python/Node validation. Cloud execution and trained weights still require a user-started provider session.
+See [MCT_02_CLOUD_RUNNER.md](./MCT_02_CLOUD_RUNNER.md). Adds a from-scratch tokenizer and Transformer runner, resumable checkpoints, Kaggle/Colab notebooks and automated checks.
 
 ## MCT-03 — Dataset Studio
 
-Add dataset ingestion, license/provenance records, deduplication, language balance reports, and deterministic train/validation/test splits with inspection tools.
+See [MCT_03_DATASET_STUDIO.md](./MCT_03_DATASET_STUDIO.md). Adds JSONL ingestion, Unicode normalization, duplicate removal, deterministic document-level train/validation/test splits, language distribution reports, and provenance hashes. Also hardens the trainer against empty/undersized evaluation splits.
 
 ## MCT-04 — Model factory and experiment management
 
-Add configurable model families, tokenizer evaluation, parameter/VRAM estimates, experiment tracking, and model registry integration. Validate the pilot architecture against actual free-tier GPU memory before scaling.
+Add configurable model families, tokenizer evaluation, parameter/VRAM estimates, experiment tracking, and model registry integration. Validate pilot architecture against actual free-tier GPU memory before scaling.
 
 ## MCT-05 — Training evaluation and application integration
 
@@ -24,8 +24,8 @@ Add benchmark suites, generation/evaluation tools, portable inference runtime, m
 
 ## AI Core — Desktop runtime hardening
 
-The current local character MLP is only a tiny research baseline. Expand the model registry, checkpoint validation, training controls, inference API, and UI only after architecture and resource requirements are measured. Do not label the assistant as complete until it can perform the advertised game-development tasks reliably.
+The current local character MLP is only a tiny research baseline. Expand model registry, checkpoint validation, training controls, inference API and UI only after architecture/resource requirements are measured. Do not label the assistant complete until it can reliably perform the advertised game-development tasks.
 
 ## Phase 03 — 3D Scene Editor
 
-See [PHASE_03_SCENE_EDITOR.md](./PHASE_03_SCENE_EDITOR.md). This phase adds a local 3D scene authoring viewport and project scene persistence.
+See [PHASE_03_SCENE_EDITOR.md](./PHASE_03_SCENE_EDITOR.md).

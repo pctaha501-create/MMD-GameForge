@@ -79,19 +79,20 @@ def main():
         special_tokens=["<|endoftext|>"],
     )
     tokenizer.save(str(tokenizer_path))
+    actual_vocab_size = tokenizer.get_vocab_size()
+    if actual_vocab_size > int(arch["vocab_size"]):
+        raise ValueError(f"Tokenizer produced {actual_vocab_size} tokens, exceeding architecture vocab_size={arch['vocab_size']}.")
     train_ids = torch.tensor(tokenizer.encode(train_text).ids, dtype=torch.long)
     val_ids = torch.tensor(tokenizer.encode(val_text).ids, dtype=torch.long)
     test_ids = torch.tensor(tokenizer.encode(test_text).ids, dtype=torch.long)
     seq_len = int(arch["max_sequence_length"])
-    if len(train_ids) <= seq_len + 1:
-        raise ValueError("Training split is too small after tokenization for the configured sequence length.")
-    if len(val_ids) <= seq_len + 1:
-        print("Warning: validation split is short; using a held-out tail of the training split.")
-        split_at = max(seq_len + 2, int(len(train_ids) * 0.9))
-        val_ids, train_ids = train_ids[split_at:], train_ids[:split_at]
-    if len(test_ids) <= seq_len + 1:
-        print("Warning: test split is short; final test metrics will use validation tokens.")
-        test_ids = val_ids
+    minimum_tokens = seq_len + 2
+    for split_name, ids in (("train", train_ids), ("validation", val_ids), ("test", test_ids)):
+        if len(ids) < minimum_tokens:
+            raise ValueError(
+                f"{split_name} split has {len(ids)} tokens; at least {minimum_tokens} are required "
+                f"for sequence length {seq_len}. Add more licensed documents or use a smaller max_sequence_length."
+            )
 
     class MMDTransformer(nn.Module):
         def __init__(self):
@@ -147,6 +148,8 @@ def main():
         state = torch.load(checkpoint, map_location=device, weights_only=False)
         if state.get("config_sha256") != config_hash or state.get("dataset_revision") != provenance["revision"]:
             raise ValueError("Checkpoint config or dataset revision does not match this run.")
+        if state.get("tokenizer_sha256") != sha256(tokenizer_path):
+            raise ValueError("Checkpoint tokenizer does not match the newly built tokenizer.")
         model.load_state_dict(state["model"])
         optimizer.load_state_dict(state["optimizer"])
         scheduler.load_state_dict(state["scheduler"])
@@ -181,7 +184,8 @@ def main():
             "model": model.state_dict(), "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(), "scaler": scaler.state_dict(),
             "global_step": step, "config_sha256": config_hash,
-            "dataset_revision": provenance["revision"], "seed": seed,
+            "dataset_revision": provenance["revision"], "tokenizer_sha256": sha256(tokenizer_path),
+            "seed": seed,
         }, temp)
         os.replace(temp, checkpoint)
         metrics = {"global_step": step, "validation_loss": val_loss, "learning_rate": optimizer.param_groups[0]["lr"], "device": str(device)}
