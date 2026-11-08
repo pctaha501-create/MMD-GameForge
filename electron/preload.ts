@@ -1,8 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppInfo, DesktopAPI, ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings } from "../src/shared/types.js";
+import type { AppInfo, DesktopAPI, ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings, ImportedModel } from "../src/shared/types.js";
 
 const api: DesktopAPI = {
   getAppInfo: () => ipcRenderer.invoke("app:get-info") as Promise<AppInfo>,
+  listModels: () => ipcRenderer.invoke("models:list") as Promise<ImportedModel[]>,
+  importModelBundleFolder: () => ipcRenderer.invoke("models:import-folder") as Promise<ImportedModel | null>,
   createProject: (name) => ipcRenderer.invoke("project:create", name) as Promise<ProjectSummary | null>,
   openProject: () => ipcRenderer.invoke("project:open") as Promise<ProjectSummary | null>,
   inspectProject: (projectPath) => ipcRenderer.invoke("project:inspect", projectPath) as Promise<ProjectSummary>,

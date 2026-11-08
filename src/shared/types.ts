@@ -18,8 +18,12 @@ export interface AppInfo {
   isPackaged: boolean;
 }
 
+export interface ImportedModel { id:string; modelFamily:string; installedAt:string; datasetRevision:string; testLoss:number|null; parameterStatus:string; folder:string; }
+
 export interface DesktopAPI {
   getAppInfo(): Promise<AppInfo>;
+  listModels(): Promise<ImportedModel[]>;
+  importModelBundleFolder(): Promise<ImportedModel | null>;
   createProject(name: string): Promise<ProjectSummary | null>;
   openProject(): Promise<ProjectSummary | null>;
   inspectProject(projectPath: string): Promise<ProjectSummary>;

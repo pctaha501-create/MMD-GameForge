@@ -1,10 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { mkdir, readdir, stat, readFile, writeFile, copyFile, realpath, access } from "node:fs/promises";
+import { mkdir, readdir, stat, lstat, readFile, writeFile, copyFile, realpath, access, rm } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import projectNameRules = require("../src/shared/project-name.cjs");
-import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings } from "../src/shared/types.js";
+import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings, ImportedModel } from "../src/shared/types.js";
 
 const { validateProjectName } = projectNameRules;
 const isDevelopment = !app.isPackaged;
@@ -64,6 +66,100 @@ function createWindow(): void {
     if (!allowed) event.preventDefault();
   });
 }
+
+
+async function hashFile(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+async function modelStorageRoot(): Promise<string> {
+  const root = path.join(app.getPath("userData"), "models");
+  await mkdir(root, { recursive: true });
+  return root;
+}
+async function readInstalledModels(): Promise<ImportedModel[]> {
+  const root = await modelStorageRoot();
+  const entries = await readdir(root, { withFileTypes: true });
+  const models: ImportedModel[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    const folder = path.join(root, entry.name);
+    try {
+      const installed = JSON.parse(await readFile(path.join(folder, "installed.json"), "utf8")) as ImportedModel;
+      const manifest = JSON.parse(await readFile(path.join(folder, "bundle-manifest.json"), "utf8")) as Record<string, unknown>;
+      if (manifest.schema_version !== "mct.model-bundle.v1" || installed.id !== entry.name) continue;
+      models.push(installed);
+    } catch { /* Ignore incomplete or invalid folders. */ }
+  }
+  return models.sort((a,b)=>b.installedAt.localeCompare(a.installedAt));
+}
+ipcMain.handle("models:list", async () => readInstalledModels());
+ipcMain.handle("models:import-folder", async () => {
+  const selected = await dialog.showOpenDialog({
+    title: "Select an extracted MMD model bundle folder",
+    properties: ["openDirectory"],
+  });
+  if (selected.canceled || !selected.filePaths[0]) return null;
+  const source = await realpath(selected.filePaths[0]);
+  const entries = await readdir(source, { withFileTypes: true });
+  if (entries.some(x => x.isSymbolicLink())) throw new Error("Model bundles cannot contain symbolic links.");
+  const manifestFile = path.join(source, "bundle-manifest.json");
+  const manifestInfo = await stat(manifestFile);
+  if (manifestInfo.size > 1024 * 1024) throw new Error("Bundle manifest exceeds the 1 MB safety limit.");
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8")) as {
+    schema_version?: string; model_family?: string;
+    initialization?: { weights_origin?: string };
+    lineage?: { config_sha256?: string; dataset_revision?: string };
+    evaluation?: { test_loss?: number; perplexity?: number };
+    files?: { path: string; sha256: string; size_bytes: number }[];
+  };
+  if (manifest.schema_version !== "mct.model-bundle.v1") throw new Error("Unsupported MMD model bundle version.");
+  if (manifest.initialization?.weights_origin !== "random_initialization") throw new Error("This bundle is not verified as a from-scratch MMD model.");
+  if (!manifest.model_family || !Array.isArray(manifest.files) || manifest.files.length < 4) throw new Error("Bundle manifest is incomplete.");
+  const allowed = new Set(["checkpoint.pt", "tokenizer.json", "checkpoint-manifest.json", "mmd-multilingual-pilot.json", "evaluation.json", "config.json"]);
+  const names = new Set<string>();
+  let total = 0;
+  for (const item of manifest.files) {
+    if (!item || typeof item.path !== "string" || path.basename(item.path) !== item.path || !allowed.has(item.path)) throw new Error("Bundle contains an unsupported file path.");
+    if (names.has(item.path)) throw new Error("Bundle contains duplicate file entries.");
+    names.add(item.path);
+    if (!/^[a-f0-9]{64}$/i.test(item.sha256) || !Number.isSafeInteger(item.size_bytes) || item.size_bytes < 0) throw new Error("Bundle contains invalid artifact metadata.");
+    total += item.size_bytes;
+    if (total > 10 * 1024 * 1024 * 1024) throw new Error("Model bundle exceeds the 10 GB import safety limit.");
+    const file = path.join(source, item.path);
+    const info = await lstat(file);
+    if (!info.isFile() || info.isSymbolicLink() || info.size !== item.size_bytes) throw new Error("Model artifact size/type mismatch: " + item.path);
+    if (await hashFile(file) !== item.sha256) throw new Error("Model artifact SHA-256 mismatch: " + item.path);
+  }
+  for (const required of ["checkpoint.pt", "tokenizer.json", "checkpoint-manifest.json"]) if (!names.has(required)) throw new Error("Required model artifact missing: " + required);
+  const checkpointManifest = JSON.parse(await readFile(path.join(source, "checkpoint-manifest.json"), "utf8")) as {
+    initialization?: { weights_origin?: string }; lineage?: { config_sha256?: string; dataset_revision?: string };
+  };
+  if (checkpointManifest.initialization?.weights_origin !== "random_initialization") throw new Error("Checkpoint lineage does not confirm random initialization.");
+  if (checkpointManifest.lineage?.config_sha256 !== manifest.lineage?.config_sha256 || checkpointManifest.lineage?.dataset_revision !== manifest.lineage?.dataset_revision) throw new Error("Bundle and checkpoint lineage do not match.");
+  const safeFamily = manifest.model_family.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48) || "MMD-Model";
+  const id = safeFamily + "-" + Date.now().toString(36);
+  const root = await modelStorageRoot();
+  const destination = path.join(root, id);
+  await mkdir(destination, { recursive: false });
+  try {
+    for (const item of manifest.files) await copyFile(path.join(source, item.path), path.join(destination, item.path));
+    await copyFile(manifestFile, path.join(destination, "bundle-manifest.json"));
+    const installed: ImportedModel = {
+      id, modelFamily: manifest.model_family, installedAt: new Date().toISOString(),
+      datasetRevision: manifest.lineage?.dataset_revision ?? "unknown",
+      testLoss: typeof manifest.evaluation?.test_loss === "number" ? manifest.evaluation.test_loss : null,
+      parameterStatus: "verified_bundle_imported",
+      folder: destination,
+    };
+    await writeFile(path.join(destination, "installed.json"), JSON.stringify(installed, null, 2), "utf8");
+    return installed;
+  } catch (error) {
+    await rm(destination, { recursive: true, force: true });
+    throw error;
+  }
+});
 
 ipcMain.handle("app:get-info", () => ({
   name: app.getName(),
