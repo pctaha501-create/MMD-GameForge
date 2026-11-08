@@ -5,9 +5,9 @@ from pathlib import Path
 
 BASE = {
     "schema_version": "mct.model-config.v1",
-    "model_family": "MMD-Multilingual-Tiny",
+    "model_family": "MMD-Bilingual-Tiny",
     "stage": "experiment",
-    "description": "Small decoder-only Transformer initialized from random weights.",
+    "description": "Small Persian/English decoder-only Transformer initialized from random weights.",
     "architecture": {
         "type": "decoder_only_transformer", "vocab_size": 8000,
         "max_sequence_length": 256, "hidden_size": 128, "num_layers": 2,
@@ -91,6 +91,8 @@ def create_config(profile: str, seed: int | None = None) -> dict:
                                          hardware_note="AdamW state lower bound is about 15.25 GiB before activations and runtime overhead; 24 GiB is a minimum preflight, not a fit guarantee.")
     config["training"]["checkpoint_interval_steps"] = min(100, max(10, steps // 10))
     config["training"]["evaluation_interval_steps"] = config["training"]["checkpoint_interval_steps"]
+    if profile == "bilingual-base-1b":
+        config["training"].update(checkpoint_interval_steps=25, evaluation_interval_steps=50)
     if seed is not None:
         config["initialization"]["seed"] = seed
     return config

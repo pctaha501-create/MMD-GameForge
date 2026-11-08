@@ -19,6 +19,15 @@ class CloudRuntimeValidationTests(unittest.TestCase):
             "splits": {"train": "90%", "validation": "5%", "test": "5%"}
         }
 
+    def test_base_1b_config_is_bilingual_and_cuda_only(self):
+        base = json.loads((ROOT / "cloud/configs/mmd-base-1b-bilingual.json").read_text(encoding="utf-8"))
+        validate_config(base)
+        self.assertEqual(set(base["tokenizer"]["languages"]), {"fa", "en"})
+        bad = json.loads(json.dumps(base))
+        bad["tokenizer"]["languages"].append("de")
+        with self.assertRaisesRegex(ValueError, "only Persian"):
+            validate_config(bad)
+
     def test_pilot_config_is_random_init_and_paid_fallback_disabled(self):
         validate_config(self.config)
         bad = json.loads(json.dumps(self.config))

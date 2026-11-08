@@ -26,9 +26,9 @@ test("MCT checkpoint contract records random initialization and artifact hashes"
   assert.ok(schema.required.includes("evaluation"));
 });
 
-test("multilingual pilot config starts from random weights and has bounded pilot resources", () => {
+test("bilingual pilot config starts from random weights and has bounded pilot resources", () => {
   const config = readJson("cloud/configs/mmd-multilingual-pilot.json");
-  assert.equal(config.model_family, "MMD-Multilingual-Base");
+  assert.equal(config.model_family, "MMD-Bilingual-Pilot");
   assert.equal(config.initialization.weights, "random");
   assert.equal(config.tokenizer.training_from_scratch, true);
   assert.ok(config.tokenizer.languages.includes("fa"));
@@ -45,4 +45,16 @@ test("cloud security policy and provider policy exist", () => {
   assert.match(provider, /Do not turn a free Colab runtime into an unattended service/);
   assert.match(security, /Never commit/);
   assert.match(security, /license/);
+});
+
+
+test("MMD Base 1B config is bilingual, random-init, and 1B class", () => {
+  const config = readJson("cloud/configs/mmd-base-1b-bilingual.json");
+  assert.equal(config.model_family, "MMD-Base-1B-Bilingual");
+  assert.deepEqual(config.tokenizer.languages, ["fa", "en"]);
+  assert.equal(config.initialization.weights, "random");
+  assert.equal(config.architecture.hidden_size, 2048);
+  assert.equal(config.architecture.num_layers, 19);
+  assert.equal(config.resource_policy.require_cuda, true);
+  assert.equal(config.resource_policy.minimum_gpu_memory_gib, 24);
 });

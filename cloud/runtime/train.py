@@ -1,4 +1,4 @@
-"""MMD from-scratch multilingual Transformer trainer for user-started cloud notebooks.
+"""MMD from-scratch Persian/English Transformer trainer for user-started cloud notebooks.
 
 Requires PyTorch and tokenizers in the selected notebook runtime. No pretrained
 weights or hosted inference APIs are loaded. Dataset and provenance are supplied
@@ -30,7 +30,7 @@ def atomic_json(path: Path, value: dict) -> None:
     os.replace(temp, path)
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train MMD-Multilingual-Base from random initialization.")
+    parser = argparse.ArgumentParser(description="Train an MMD Persian/English model from random initialization.")
     parser.add_argument("--config", required=True)
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--provenance", required=True)
