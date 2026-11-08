@@ -426,7 +426,11 @@ ipcMain.handle("unreal:create-project",async(_event,rawRoot:unknown,rawName:unkn
     ["Source/"+name+"Editor.Target.cs"]:`using UnrealBuildTool;\nusing System.Collections.Generic;\npublic class ${name}EditorTarget : TargetRules\n{\n    public ${name}EditorTarget(TargetInfo Target) : base(Target)\n    {\n        Type = TargetType.Editor;\n        DefaultBuildSettings = BuildSettingsVersion.V5;\n        ExtraModuleNames.Add("${name}");\n    }\n}\n`,
     ["Source/"+name+"/"+name+".Build.cs"]:`using UnrealBuildTool;\npublic class ${name} : ModuleRules\n{\n    public ${name}(ReadOnlyTargetRules Target) : base(Target)\n    {\n        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;\n        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore" });\n    }\n}\n`,
     ["Source/"+name+"/Private/"+name+".cpp"]:`#include "Modules/ModuleManager.h"\nIMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ${name}, "${name}");\n`,
-    ["README.md"]:`# ${name}\n\nUnreal Engine C++ project scaffold created by MMD GameForge.\n\nOpen ${name}.uproject with an installed Unreal Engine version, generate project files if prompted, then build the ${name}Editor target. This scaffold is a starting point, not a finished game.\n`
+    ["Source/"+name+"/Public/"+name+"GameMode.h"]:`#pragma once\n#include "CoreMinimal.h"\n#include "GameFramework/GameModeBase.h"\n#include "${name}GameMode.generated.h"\n\nUCLASS()\nclass ${name.toUpperCase()}_API A${name}GameMode : public AGameModeBase\n{\n    GENERATED_BODY()\n};\n`,
+    ["Source/"+name+"/Private/"+name+"GameMode.cpp"]:`#include "${name}GameMode.h"\n`,
+    ["Config/DefaultEngine.ini"]:`[/Script/EngineSettings.GeneralProjectSettings]\nProjectName=${name}\nProjectVersion=1.0.0\n\n`,
+    ["Content/README.md"]:`# Content\\n\\nPlace maps, materials, meshes, textures and other Unreal assets in this directory.\\n`,
+    ["README.md"]:`# ${name}\n\nUnreal Engine 5 C++ project scaffold created by MMD GameForge.\n\nOpen ${name}.uproject with Unreal Engine 5, generate project files if prompted, then build the ${name}Editor target. This scaffold is a starting point, not a finished game.\n`
   };
   try{
     for(const [relative,content] of Object.entries(files)){const target=path.join(temp,relative);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,content,{encoding:"utf8",flag:"wx"});}
