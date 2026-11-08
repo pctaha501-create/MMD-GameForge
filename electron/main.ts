@@ -121,7 +121,7 @@ ipcMain.handle("models:import-folder", async () => {
   const names = new Set<string>();
   let total = 0;
   for (const item of manifest.files) {
-    if (!item || typeof item.path !== "string" || path.basename(item.path) !== item.path || !allowed.has(item.path)) throw new Error("Bundle contains an unsupported file path.");
+    if (!item || typeof item.path !== "string" || path.basename(item.path) !== item.path || !(allowed.has(item.path) || /^[a-zA-Z0-9_-]+\\.json$/.test(item.path))) throw new Error("Bundle contains an unsupported file path.");
     if (names.has(item.path)) throw new Error("Bundle contains duplicate file entries.");
     names.add(item.path);
     if (!/^[a-f0-9]{64}$/i.test(item.sha256) || !Number.isSafeInteger(item.size_bytes) || item.size_bytes < 0) throw new Error("Bundle contains invalid artifact metadata.");
@@ -138,6 +138,13 @@ ipcMain.handle("models:import-folder", async () => {
   };
   if (checkpointManifest.initialization?.weights_origin !== "random_initialization") throw new Error("Checkpoint lineage does not confirm random initialization.");
   if (checkpointManifest.lineage?.config_sha256 !== manifest.lineage?.config_sha256 || checkpointManifest.lineage?.dataset_revision !== manifest.lineage?.dataset_revision) throw new Error("Bundle and checkpoint lineage do not match.");
+  const configArtifact = manifest.files.find(item => item.path !== "evaluation.json" && item.path.endsWith(".json") && item.path !== "checkpoint-manifest.json" && item.path !== "tokenizer.json");
+  if (!configArtifact || configArtifact.sha256 !== manifest.lineage?.config_sha256) throw new Error("Bundle config hash does not match checkpoint lineage.");
+  const checkpointArtifacts = new Map((checkpointManifest as { artifacts?: { path:string; sha256:string }[] }).artifacts?.map(item => [item.path,item.sha256]) ?? []);
+  for (const name of ["checkpoint.pt","tokenizer.json"]) {
+    const entry = manifest.files.find(item => item.path === name);
+    if (!entry || checkpointArtifacts.get(name) !== entry.sha256) throw new Error("Checkpoint artifact manifest mismatch: " + name);
+  }
   const safeFamily = manifest.model_family.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48) || "MMD-Model";
   const id = safeFamily + "-" + Date.now().toString(36);
   const root = await modelStorageRoot();
