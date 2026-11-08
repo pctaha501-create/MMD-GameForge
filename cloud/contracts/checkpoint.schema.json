@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pctaha501-create/MMD-GameForge/blob/main/cloud/contracts/checkpoint.schema.json",
+  "title": "MMD Model Checkpoint Manifest",
+  "description": "Portable lineage and integrity metadata for a model checkpoint.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "model_family",
+    "architecture_revision",
+    "initialization",
+    "training_state",
+    "lineage",
+    "artifacts",
+    "evaluation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "mct.checkpoint.v1"
+    },
+    "model_family": {
+      "type": "string",
+      "minLength": 2
+    },
+    "architecture_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "initialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "seed",
+        "weights_origin"
+      ],
+      "properties": {
+        "method": {
+          "enum": [
+            "xavier_uniform",
+            "kaiming_uniform",
+            "normal",
+            "architecture_defined"
+          ]
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "weights_origin": {
+          "const": "random_initialization"
+        }
+      }
+    },
+    "training_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "global_step",
+        "epoch",
+        "optimizer_state_included"
+      ],
+      "properties": {
+        "global_step": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "epoch": {
+          "type": "number",
+          "minimum": 0
+        },
+        "optimizer_state_included": {
+          "type": "boolean"
+        },
+        "scheduler_state_included": {
+          "type": "boolean"
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_commit",
+        "config_sha256",
+        "dataset_revision",
+        "tokenizer_revision"
+      ],
+      "properties": {
+        "source_commit": {
+          "type": "string",
+          "minLength": 7
+        },
+        "config_sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "dataset_revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tokenizer_revision": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "size_bytes"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "metrics_path"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "not_run",
+            "passed",
+            "failed"
+          ]
+        },
+        "metrics_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
