@@ -18,7 +18,7 @@ export interface AppInfo {
   isPackaged: boolean;
 }
 
-export interface ImportedModel { id:string; modelFamily:string; installedAt:string; datasetRevision:string; testLoss:number|null; parameterStatus:string; folder:string; }
+export interface ImportedModel { id:string; modelFamily:string; installedAt:string; datasetRevision:string; testLoss:number|null; parameterStatus:string; folder:string; running:boolean; runtimeDevice:string|null; }
 
 export interface DesktopAPI {
   getAppInfo(): Promise<AppInfo>;

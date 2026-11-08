@@ -90,7 +90,7 @@ async function readInstalledModels(): Promise<ImportedModel[]> {
       const installed = JSON.parse(await readFile(path.join(folder, "installed.json"), "utf8")) as ImportedModel;
       const manifest = JSON.parse(await readFile(path.join(folder, "bundle-manifest.json"), "utf8")) as Record<string, unknown>;
       if (manifest.schema_version !== "mct.model-bundle.v1" || installed.id !== entry.name) continue;
-      models.push(installed);
+      models.push({...installed,running:modelProcesses.has(installed.id),runtimeDevice:modelProcesses.get(installed.id)?.device??null});
     } catch { /* Ignore incomplete or invalid folders. */ }
   }
   return models.sort((a,b)=>b.installedAt.localeCompare(a.installedAt));
@@ -136,7 +136,7 @@ ipcMain.handle("models:start",async(_event,rawId:unknown)=>{
       if(error){child.kill();reject(error);}else if(value)resolve(value);
     };
     child.once("error",error=>finish(new Error("Could not start Python: "+error.message)));
-    child.once("exit",(code)=>{if(!settled)finish(new Error("Python runtime exited before becoming ready (code "+code+"). "+stderr.slice(-1200)));});
+    child.once("exit",(code)=>{const active=modelProcesses.get(model.id);if(active?.child===child)modelProcesses.delete(model.id);if(!settled)finish(new Error("Python runtime exited before becoming ready (code "+code+"). "+stderr.slice(-1200)));});
     child.stdout?.on("data",(chunk:Buffer)=>{
       stdout+=chunk.toString();
       for(const line of stdout.split("\n")){
