@@ -25,7 +25,7 @@ The repository contains an Electron + TypeScript desktop shell, project workspac
 - Import of extracted model bundles with SHA-256 and checkpoint-lineage validation.
 - Local model inventory and an optional Python inference process using loopback-only authenticated requests.
 - Prompt playground for imported models.
-- Allowlisted project file, scene and Unreal actions with explicit user approval, plus read-only Unreal project structure validation.
+- Allowlisted project file, scene and Unreal actions with explicit user approval, plus read-only Unreal project structure validation and approval-gated creation of a C++ Unreal starter project.
 - Tool-call validation rejects path traversal, arbitrary tools and shell execution.
 
 The desktop inference path requires a user-selected Python environment with PyTorch and tokenizers. No trained model weights are included yet.
