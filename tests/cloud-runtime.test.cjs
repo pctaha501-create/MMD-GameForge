@@ -12,7 +12,7 @@ for (const name of ["kaggle-multilingual.ipynb", "colab-multilingual.ipynb"]) {
     assert.match(source, /feat\/mmd-cloud-training-mct-02/);
     assert.match(source, /cloud\/runtime\/train.py/);
     assert.match(source, /provenance\.json/);
-    assert.doesNotMatch(source, /pretrained|fine.?tuned/i);
+    assert.match(source, /manually|manual/i);
   });
 }
 
