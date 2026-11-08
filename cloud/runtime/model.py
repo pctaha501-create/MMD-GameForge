@@ -18,6 +18,7 @@ def build_model(config: dict):
             )
             self.blocks = nn.TransformerEncoder(layer, num_layers=arch["num_layers"], enable_nested_tensor=False)
             self.norm = nn.LayerNorm(arch["hidden_size"])
+            self.gradient_checkpointing = bool(config.get("training", {}).get("gradient_checkpointing", False))
             self.head = nn.Linear(arch["hidden_size"], arch["vocab_size"], bias=False)
             if arch.get("tie_word_embeddings", True):
                 self.head.weight = self.token.weight
@@ -33,7 +34,13 @@ def build_model(config: dict):
             length = ids.size(1)
             positions = torch.arange(length, device=ids.device).unsqueeze(0)
             hidden = self.token(ids) + self.position(positions)
-            hidden = self.blocks(hidden, mask=self.causal_mask[:length, :length])
+            mask = self.causal_mask[:length, :length]
+            if self.training and self.gradient_checkpointing:
+                from torch.utils.checkpoint import checkpoint
+                for block in self.blocks.layers:
+                    hidden = checkpoint(block, hidden, mask, use_reentrant=False)
+            else:
+                hidden = self.blocks(hidden, mask=mask)
             return self.head(self.norm(hidden))
     return MMDTransformer()
 
