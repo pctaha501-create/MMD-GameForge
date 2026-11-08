@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { mkdir, readdir, stat, lstat, readFile, writeFile, copyFile, realpath, access, rm } from "node:fs/promises";
 import { createReadStream } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { createServer } from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
@@ -95,6 +96,80 @@ async function readInstalledModels(): Promise<ImportedModel[]> {
   return models.sort((a,b)=>b.installedAt.localeCompare(a.installedAt));
 }
 ipcMain.handle("models:list", async () => readInstalledModels());
+
+const modelProcesses = new Map<string, { child: ReturnType<typeof spawn>; port: number; token: string; device: string }>();
+async function freeLoopbackPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve,reject)=>server.once("error",reject).listen(0,"127.0.0.1",()=>resolve()));
+  const address=server.address();
+  if(!address||typeof address==="string"){server.close();throw new Error("Could not allocate a local runtime port.");}
+  const port=address.port;
+  await new Promise<void>(resolve=>server.close(()=>resolve()));
+  return port;
+}
+async function findInstalledModel(id: string): Promise<ImportedModel> {
+  const model=(await readInstalledModels()).find(item=>item.id===id);
+  if(!model)throw new Error("The selected model is not installed.");
+  return model;
+}
+ipcMain.handle("models:start",async(_event,rawId:unknown)=>{
+  if(typeof rawId!=="string"||!rawId)throw new Error("Select an installed model first.");
+  const model=await findInstalledModel(rawId);
+  const existing=modelProcesses.get(model.id);
+  if(existing)return {running:true,device:existing.device};
+  const python=await dialog.showOpenDialog({title:"Select Python with PyTorch and tokenizers installed",properties:["openFile"],...(process.platform==="win32"?{filters:[{name:"Python executable",extensions:["exe"]}]}:{})});
+  if(python.canceled||!python.filePaths[0])return null;
+  const scriptRoot=app.isPackaged?path.join(process.resourcesPath,"cloud","runtime"):path.resolve(app.getAppPath(),"cloud","runtime");
+  const script=path.join(scriptRoot,"serve.py");
+  await access(script);
+  const port=await freeLoopbackPort();
+  const token=randomBytes(32).toString("base64url");
+  const child=spawn(python.filePaths[0],[script,"--model-dir",model.folder,"--host","127.0.0.1","--port",String(port)],{
+    cwd:scriptRoot,windowsHide:true,stdio:["ignore","pipe","pipe"],
+    env:{...process.env,MMD_RUNTIME_TOKEN:token,PYTHONUNBUFFERED:"1"}
+  });
+  let stdout="",stderr="",settled=false;
+  const result=await new Promise<{running:true;device:string}>((resolve,reject)=>{
+    const timeout=setTimeout(()=>finish(new Error("Model runtime did not become ready within 180 seconds. Check that this Python environment has PyTorch and tokenizers.")),180000);
+    const finish=(error?:Error,value?:{running:true;device:string})=>{
+      if(settled)return;settled=true;clearTimeout(timeout);
+      if(error){child.kill();reject(error);}else if(value)resolve(value);
+    };
+    child.once("error",error=>finish(new Error("Could not start Python: "+error.message)));
+    child.once("exit",(code)=>{if(!settled)finish(new Error("Python runtime exited before becoming ready (code "+code+"). "+stderr.slice(-1200)));});
+    child.stdout?.on("data",(chunk:Buffer)=>{
+      stdout+=chunk.toString();
+      for(const line of stdout.split("\n")){
+        try{const message=JSON.parse(line);if(message.event==="MMD_RUNTIME_READY"){
+          modelProcesses.set(model.id,{child,port,token,device:String(message.device??"unknown")});
+          finish(undefined,{running:true,device:String(message.device??"unknown")});
+        }}catch{/* Wait for a complete JSON line. */}
+      }
+      stdout=stdout.slice(-8192);
+    });
+    child.stderr?.on("data",(chunk:Buffer)=>{stderr=(stderr+chunk.toString()).slice(-8192);});
+  });
+  return result;
+});
+ipcMain.handle("models:stop",async(_event,rawId:unknown)=>{
+  if(typeof rawId!=="string")return false;
+  const runtime=modelProcesses.get(rawId);if(!runtime)return false;
+  modelProcesses.delete(rawId);runtime.child.kill();return true;
+});
+ipcMain.handle("models:generate",async(_event,rawId:unknown,rawPrompt:unknown,options:unknown)=>{
+  if(typeof rawId!=="string"||typeof rawPrompt!=="string")throw new Error("Invalid generation request.");
+  const runtime=modelProcesses.get(rawId);if(!runtime)throw new Error("Start the selected local model first.");
+  const opts=options&&typeof options==="object"?options as Record<string,unknown>:{};
+  const response=await fetch(`http://127.0.0.1:${runtime.port}/generate`,{
+    method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+runtime.token},
+    body:JSON.stringify({prompt:rawPrompt,max_new_tokens:opts.maxNewTokens??128,temperature:opts.temperature??0.8,top_k:opts.topK??40}),
+    signal:AbortSignal.timeout(180000)
+  });
+  const body=await response.json() as {output?:string;error?:string;model_family?:string};
+  if(!response.ok)throw new Error(body.error??"Local generation failed.");
+  return {output:body.output??"",modelFamily:body.model_family??"MMD model",device:runtime.device};
+});
+
 ipcMain.handle("models:import-folder", async () => {
   const selected = await dialog.showOpenDialog({
     title: "Select an extracted MMD model bundle folder",
@@ -336,6 +411,8 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on("before-quit",()=>{for(const runtime of modelProcesses.values())runtime.child.kill();modelProcesses.clear();});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

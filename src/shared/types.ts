@@ -23,6 +23,9 @@ export interface ImportedModel { id:string; modelFamily:string; installedAt:stri
 export interface DesktopAPI {
   getAppInfo(): Promise<AppInfo>;
   listModels(): Promise<ImportedModel[]>;
+  startModel(modelId:string):Promise<{running:boolean;device:string}|null>;
+  stopModel(modelId:string):Promise<boolean>;
+  generateWithModel(modelId:string,prompt:string,options?:{maxNewTokens?:number;temperature?:number;topK?:number}):Promise<{output:string;modelFamily:string;device:string}>;
   importModelBundleFolder(): Promise<ImportedModel | null>;
   createProject(name: string): Promise<ProjectSummary | null>;
   openProject(): Promise<ProjectSummary | null>;

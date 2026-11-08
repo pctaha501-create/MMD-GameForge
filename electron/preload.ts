@@ -4,6 +4,9 @@ import type { AppInfo, DesktopAPI, ProjectSummary, ProjectFileNode, UnrealStatus
 const api: DesktopAPI = {
   getAppInfo: () => ipcRenderer.invoke("app:get-info") as Promise<AppInfo>,
   listModels: () => ipcRenderer.invoke("models:list") as Promise<ImportedModel[]>,
+  startModel: (modelId) => ipcRenderer.invoke("models:start",modelId),
+  stopModel: (modelId) => ipcRenderer.invoke("models:stop",modelId),
+  generateWithModel: (modelId,prompt,options) => ipcRenderer.invoke("models:generate",modelId,prompt,options),
   importModelBundleFolder: () => ipcRenderer.invoke("models:import-folder") as Promise<ImportedModel | null>,
   createProject: (name) => ipcRenderer.invoke("project:create", name) as Promise<ProjectSummary | null>,
   openProject: () => ipcRenderer.invoke("project:open") as Promise<ProjectSummary | null>,

@@ -27,14 +27,37 @@
   "build": {
     "appId": "studio.mmd.gameforge",
     "productName": "MMD GameForge",
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "package.json"],
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
-    }
+    },
+    "extraResources": [
+      {
+        "from": "cloud/runtime",
+        "to": "cloud/runtime",
+        "filter": [
+          "*.py"
+        ]
+      }
+    ]
   }
 }
