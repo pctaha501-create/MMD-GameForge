@@ -26,3 +26,15 @@ test("MCT-02 trainer and dependency-free validator are present", () => {
   assert.match(validator, /validate_provenance/);
   assert.match(validator, /paid_fallback/);
 });
+
+for (const name of ["kaggle-instruction-sft.ipynb", "colab-instruction-sft.ipynb"]) {
+  test(name + " starts a from-scratch instruction training session", () => {
+    const notebook = JSON.parse(fs.readFileSync(path.join(root, "cloud/notebooks", name), "utf8"));
+    assert.equal(notebook.nbformat, 4);
+    const source = notebook.cells.flatMap(cell => cell.source || []).join("");
+    assert.match(source, /train_instructions\.py/);
+    assert.match(source, /model_factory\.py/);
+    assert.match(source, /provenance\.json/);
+    assert.match(source, /random weights|random initialization/i);
+  });
+}
