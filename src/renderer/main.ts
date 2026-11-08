@@ -1,6 +1,7 @@
 import "./styles.css";
 import type { ProjectSummary } from "../shared/types.js";
 import { renderProfessional, bindProfessional } from "./professional.js";
+import aiToolCallRules = require("../shared/ai-tool-call.cjs");
 
 type View = "dashboard" | "projects" | "world" | "code" | "assets" | "ai" | "training" | "settings";
 const icons: Record<string, string> = {
@@ -170,11 +171,61 @@ function aiCoreView():string {
     const p=modelProfiles[profile],e=modelEstimate(profile);
     return `<article class="ai-model-card"><div class="ai-model-top"><span class="ai-model-symbol">✳</span><span class="ai-status">CONFIG ONLY</span></div><h3>${p.name}</h3><p>${p.description}</p><div class="ai-model-stats"><span><b>${e.parameters.toLocaleString()}</b><small>PARAMETERS</small></span><span><b>${e.weightMiB.toFixed(1)} MiB</b><small>FP32 WEIGHTS</small></span></div><small class="ai-model-languages">${p.languages.join(" · ").toUpperCase()}</small></article>`;
   }).join("");
-  return `<div class="ai-page"><div class="page-heading"><div><div class="eyebrow">FIRST-PARTY INTELLIGENCE</div><h1>MMD AI <span>Core</span></h1><p class="page-lead">A family of models designed, initialized and trained by MMD GameForge.</p></div><button class="button button-primary" data-ai-action="workshop">Open Model Workshop ↗</button></div><section class="ai-warning"><b id="ai-model-state">Research status — no trained model is installed yet.</b><p>These are architecture profiles only. Real capability requires licensed data, completed cloud training, held-out evaluation and a verified model bundle.</p></section><div class="ai-section-head"><div><span class="eyebrow">MODEL FAMILY</span><h2>First-party model profiles</h2></div><span class="section-note">RANDOM INITIALIZATION ONLY</span></div><div class="ai-model-grid">${cards}</div><section class="ai-installed panel"><div class="panel-heading"><div><span class="eyebrow">LOCAL MODEL LIBRARY</span><h2>Imported model bundles</h2></div><button class="button button-primary" id="ai-import-model">Import extracted bundle folder</button></div><div id="ai-imported-models" class="ai-imported-list"><p>Checking installed models…</p></div><section class="ai-chat"><div><span class="eyebrow">LOCAL INFERENCE</span><h3>Test an imported model</h3></div><select id="ai-chat-model" aria-label="Installed model"><option value="">Select an imported model</option></select><textarea id="ai-chat-prompt" rows="4" placeholder="Ask the selected MMD model to help design a game mechanic…"></textarea><div class="ai-chat-actions"><button class="button button-primary" id="ai-chat-generate">Generate response</button><span id="ai-runtime-status">Runtime stopped</span></div><pre id="ai-chat-output">Generated responses will appear here.</pre></section><small class="ai-fineprint">Import verifies SHA-256 hashes and from-scratch lineage. Extract the ZIP bundle first. Local inference requires a Python environment with PyTorch and tokenizers installed.</small></section><section class="ai-pipeline"><div><span class="eyebrow">TRAINING PIPELINE</span><h2>From dataset to verified model</h2><p>Dataset Studio → Cloud Training → Evaluation → Model Bundle → Desktop Runtime.</p></div><button class="button button-ghost" data-ai-action="training">View training pipeline</button></section></div>`;
+  return `<div class="ai-page"><div class="page-heading"><div><div class="eyebrow">FIRST-PARTY INTELLIGENCE</div><h1>MMD AI <span>Core</span></h1><p class="page-lead">A family of models designed, initialized and trained by MMD GameForge.</p></div><button class="button button-primary" data-ai-action="workshop">Open Model Workshop ↗</button></div><section class="ai-warning"><b id="ai-model-state">Research status — no trained model is installed yet.</b><p>These are architecture profiles only. Real capability requires licensed data, completed cloud training, held-out evaluation and a verified model bundle.</p></section><div class="ai-section-head"><div><span class="eyebrow">MODEL FAMILY</span><h2>First-party model profiles</h2></div><span class="section-note">RANDOM INITIALIZATION ONLY</span></div><div class="ai-model-grid">${cards}</div><section class="ai-installed panel"><div class="panel-heading"><div><span class="eyebrow">LOCAL MODEL LIBRARY</span><h2>Imported model bundles</h2></div><button class="button button-primary" id="ai-import-model">Import extracted bundle folder</button></div><div id="ai-imported-models" class="ai-imported-list"><p>Checking installed models…</p></div><section class="ai-chat"><div><span class="eyebrow">LOCAL INFERENCE</span><h3>Test an imported model</h3></div><select id="ai-chat-model" aria-label="Installed model"><option value="">Select an imported model</option></select><textarea id="ai-chat-prompt" rows="4" placeholder="Ask the selected MMD model to help design a game mechanic…"></textarea><div class="ai-chat-actions"><button class="button button-primary" id="ai-chat-generate">Generate response</button><span id="ai-runtime-status">Runtime stopped</span></div><pre id="ai-chat-output">Generated responses will appear here.</pre><div id="ai-tool-proposal" class="ai-tool-proposal" hidden></div><pre id="ai-tool-result" class="ai-tool-result" hidden></pre></section><small class="ai-fineprint">Import verifies SHA-256 hashes and from-scratch lineage. Extract the ZIP bundle first. Local inference requires a Python environment with PyTorch and tokenizers installed.</small></section><section class="ai-pipeline"><div><span class="eyebrow">TRAINING PIPELINE</span><h2>From dataset to verified model</h2><p>Dataset Studio → Cloud Training → Evaluation → Model Bundle → Desktop Runtime.</p></div><button class="button button-ghost" data-ai-action="training">View training pipeline</button></section></div>`;
 }
 function trainingView():string {
   return `<div class="ai-page"><div class="page-heading"><div><div class="eyebrow">MMD CLOUD TRAINING</div><h1>Model <span>Workshop</span></h1><p class="page-lead">Prepare reproducible model configurations and estimate their parameter and memory requirements.</p></div></div><section class="ai-warning"><b>No cloud job is running.</b><p>Start Kaggle or Colab manually from its official interface. Free GPU availability is not guaranteed. Never add API keys or private datasets to this public repository.</p></section><section class="ai-workshop panel"><div class="ai-workshop-copy"><span class="eyebrow">MODEL FACTORY / CONFIGURATION BUILDER</span><h2>Create a model configuration</h2><p>Select a from-scratch architecture profile. This creates a configuration file only; it does not create trained weights.</p><label for="ai-profile">MODEL PROFILE</label><select id="ai-profile">${(Object.keys(modelProfiles) as ModelProfile[]).map(k=>`<option value="${k}">${modelProfiles[k].name}</option>`).join("")}</select><label for="ai-seed">RANDOM INITIALIZATION SEED</label><input id="ai-seed" type="number" min="1" max="2147483647" value="20261108"/><div id="ai-estimate" class="ai-estimate"></div><button class="button button-primary" id="ai-download-config">↓ Export model config (.json)</button><p class="ai-fineprint">Memory is a lower-bound estimate. Activations, CUDA workspace and framework overhead are additional.</p></div><aside class="ai-workshop-side"><span class="eyebrow">NEXT STEPS</span><ol><li>Prepare a licensed corpus with Dataset Studio.</li><li>Review the model configuration and resource estimate.</li><li>Run the notebook manually in Kaggle or Colab.</li><li>Evaluate the checkpoint and export a verified bundle.</li><li>Import a trained model into the desktop runtime after MCT-06.</li></ol><a href="https://github.com/pctaha501-create/MMD-GameForge/tree/feat/mmd-cloud-training-mct-02/cloud/notebooks" target="_blank" rel="noreferrer">Open cloud notebook templates ↗</a></aside></section></div>`;
 }
+
+function parseAIToolCall(output:string):unknown {
+  const trimmed=output.trim().replace(/^\`\`\`(?:json)?\\s*/i,"").replace(/\\s*\`\`\`$/,"");
+  try{return JSON.parse(trimmed) as unknown;}catch{return null;}
+}
+function renderAIToolProposal(output:string):void {
+  const root=document.querySelector<HTMLDivElement>("#ai-tool-proposal");if(!root)return;
+  const parsed=parseAIToolCall(output);const result=aiToolCallRules.validateAIToolCall(parsed);
+  if(!result.ok){root.hidden=true;root.innerHTML="";return;}
+  const labels:Record<string,string>={"project.list_files":"List project files","project.read_file":"Read project file","project.write_file":"Write project file","scene.save":"Save scene","unreal.detect":"Detect Unreal Engine","unreal.launch":"Launch Unreal Editor"};
+  root.hidden=false;
+  root.innerHTML=`<div class="ai-tool-proposal-head"><b>Proposed GameForge action</b><span>USER APPROVAL REQUIRED</span></div><p>${escapeHtml(labels[result.value.tool]??result.value.tool)}</p><code>${escapeHtml(JSON.stringify(result.value.arguments,null,2))}</code><button class="button button-primary" id="ai-run-tool">Review and run action</button><small>Nothing has been changed. This allowlisted action runs only after you approve it.</small>`;
+  root.querySelector("#ai-run-tool")?.addEventListener("click",()=>void executeAITool(result.value));
+}
+async function executeAITool(call:{tool:string;arguments:Record<string,unknown>}):Promise<void>{
+  const result=document.querySelector<HTMLPreElement>("#ai-tool-result");
+  const proposal=document.querySelector<HTMLDivElement>("#ai-tool-proposal");
+  const project=activeProject;
+  if(!project){notify("Open a project before using project tools.","error");return;}
+  const a=call.arguments;
+  try{
+    let value:unknown;
+    switch(call.tool){
+      case "project.list_files":
+        value=await window.gameForge.listProjectFiles(project.path);break;
+      case "project.read_file":
+        value=await window.gameForge.readProjectFile(project.path,String(a.path));break;
+      case "project.write_file":
+        if(!window.confirm(`Allow MMD AI to overwrite/create ${String(a.path)} in this project?`))return;
+        value=await window.gameForge.writeProjectFile(project.path,String(a.path),String(a.content));break;
+      case "scene.save":
+        if(!window.confirm(`Save scene "${String(a.scene_name)}" into this project?`))return;
+        value=await window.gameForge.saveScene(project.path,String(a.scene_name),String(a.content));break;
+      case "unreal.detect":
+        value=await window.gameForge.detectUnreal(project.path);break;
+      case "unreal.launch":{
+        const status=await window.gameForge.detectUnreal(project.path);
+        if(!status.projectFile)throw new Error("No .uproject file was found in the active project.");
+        if(!status.installed||!status.editorPath)throw new Error("Unreal Editor was not detected. Configure its path in Settings.");
+        if(!window.confirm("Launch Unreal Editor with the active project?"))return;
+        value=await window.gameForge.launchUnreal(status.projectFile,status.editorPath);break;
+      }
+      default: throw new Error("This tool is not allowlisted.");
+    }
+    if(result){result.hidden=false;result.textContent=JSON.stringify(value,null,2);}
+    if(proposal)proposal.hidden=true;
+    notify("Approved GameForge action completed.");
+  }catch(error){if(result){result.hidden=false;result.textContent=error instanceof Error?error.message:"Tool execution failed.";}notify(error instanceof Error?error.message:"Tool execution failed.","error");}
+}
+
 function bindAIEvents():void {
   document.querySelectorAll<HTMLElement>("[data-ai-action]").forEach(node=>node.addEventListener("click",()=>setView(node.dataset.aiAction==="training"?"training":"training")));
   const importButton=document.querySelector<HTMLButtonElement>("#ai-import-model");
@@ -219,7 +270,7 @@ function bindAIEvents():void {
     if(!prompt.trim()){notify("Enter a prompt first.","error");return;}
     if(button){button.disabled=true;button.textContent="Generating…";}
     if(output)output.textContent="The local model is generating…";
-    try{const result=await window.gameForge.generateWithModel(modelId,prompt,{maxNewTokens:128,temperature:.8,topK:40});if(output)output.textContent=result.output||"(The model returned an empty response.)";notify(`Generated with ${result.modelFamily} on ${result.device}.`);}
+    try{const projectContext=activeProject?`Active project: ${activeProject.name}. Project tools operate only inside this folder.\n`:"No active project is open. Do not propose project tools.\n";const systemPrompt=`You are MMD GameForge AI. Help with Unreal game development. You may answer normally. If you need a project action, output exactly one JSON object using schema_version "mmd.tool-call.v1", an allowlisted tool, and arguments. Allowed tools: project.list_files {}, project.read_file {path}, project.write_file {path,content}, scene.save {scene_name,content}, unreal.detect {}, unreal.launch {}. Never output shell commands or arbitrary code execution requests.\n${projectContext}User request: ${prompt}`;const result=await window.gameForge.generateWithModel(modelId,systemPrompt,{maxNewTokens:128,temperature:.8,topK:40});if(output)output.textContent=result.output||"(The model returned an empty response.)";renderAIToolProposal(result.output);notify(`Generated with ${result.modelFamily} on ${result.device}.`);}
     catch(error){if(output)output.textContent=error instanceof Error?error.message:"Generation failed.";notify(error instanceof Error?error.message:"Generation failed.","error");}
     finally{if(button){button.disabled=false;button.textContent="Generate response";}}
   });
