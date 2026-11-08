@@ -16,15 +16,15 @@ See [MCT_04_MODEL_FACTORY.md](./MCT_04_MODEL_FACTORY.md).
 
 ## MCT-05 — Evaluation and portable bundles
 
-See [MCT_05_EVALUATION_AND_BUNDLES.md](./MCT_05_EVALUATION_AND_BUNDLES.md). Adds lineage-verified held-out evaluation, optional human-review generation benchmarks and portable checkpoint bundles. No model is automatically declared production-ready.
+See [MCT_05_EVALUATION_AND_BUNDLES.md](./MCT_05_EVALUATION_AND_BUNDLES.md).
 
-## MCT-06 — Desktop model integration
+## MCT-06 — Local inference runtime
 
-Add secure model bundle import, model inventory, compatibility checks, inference backend selection, generation controls and task-specific AI workflows. Require real trained artifacts and hardware profiling before enabling a model in the app.
+See [MCT_06_LOCAL_INFERENCE.md](./MCT_06_LOCAL_INFERENCE.md). Adds bundle-verified, loopback-only inference with bearer-token authentication and bounded generation requests. Desktop process lifecycle integration remains in progress.
 
 ## AI Core completion
 
-The current desktop AI screen is still an architecture placeholder, not a completed assistant. Full completion requires MCT-06, actual trained artifacts, robust inference, Unreal/game-development workflows, error handling and end-to-end acceptance tests.
+The desktop AI screens now create model configs and import hash-verified model bundles. They do not yet launch inference. Full completion requires the desktop runtime bridge, real trained artifacts, domain-specific benchmarks, reliable task workflows, Unreal integration and end-to-end acceptance tests.
 
 ## Phase 03 — 3D Scene Editor
 
