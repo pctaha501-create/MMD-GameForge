@@ -114,7 +114,7 @@ def main():
             "artifacts":artifacts,"evaluation":{"status":status,"validation_loss":val_loss}}
         tmp=manifest_path.with_suffix(".json.tmp");tmp.write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8");os.replace(tmp,manifest_path)
     model.train();accum=int(train_cfg["gradient_accumulation_steps"]);interval=int(train_cfg["checkpoint_interval_steps"])
-    began=time.monotonic();budget=int(os.environ.get("MMD_MAX_RUNTIME_SECONDS","0") or 0);last_val=float("nan")
+    began=time.monotonic();budget=int(os.environ.get("MMD_MAX_RUNTIME_SECONDS","0") or 0);last_val=float("nan");step_no=start
     for step in range(start,max_steps):
         optimizer.zero_grad(set_to_none=True)
         for _ in range(accum):
