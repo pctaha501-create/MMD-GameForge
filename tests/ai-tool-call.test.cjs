@@ -21,3 +21,7 @@ test("validates scene structure before offering save",()=>{
  assert.equal(validateAIToolCall({schema_version:"mmd.tool-call.v1",tool:"scene.save",arguments:{scene_name:"Level One",content:good}}).ok,true);
  assert.equal(validateAIToolCall({schema_version:"mmd.tool-call.v1",tool:"scene.save",arguments:{scene_name:"Level One",content:"{}"}}).ok,false);
 });
+
+test("accepts safe new project file creation",()=>{
+ assert.equal(validateAIToolCall({schema_version:"mmd.tool-call.v1",tool:"project.create_file",arguments:{path:"Source/NewActor.cpp",content:"// new file"}}).ok,true);
+});

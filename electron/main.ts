@@ -340,6 +340,19 @@ ipcMain.handle("project:read-file", async (_event, projectPath: unknown, relativ
   const info = await stat(target); if (info.size > 2 * 1024 * 1024) throw new Error("Files larger than 2 MB are not opened in the built-in editor.");
   return { content: await readFile(target, "utf8"), size: info.size };
 });
+
+ipcMain.handle("project:create-file",async(_event,projectPath:unknown,relativePath:unknown,content:unknown)=>{
+  if(typeof projectPath!=="string"||!path.isAbsolute(projectPath)||typeof relativePath!=="string"||!relativePath||path.isAbsolute(relativePath))throw new Error("Invalid project file path.");
+  if(relativePath.split(/[\\/]/).some(part=>!part||part==="."||part===".."))throw new Error("Project file path must stay inside the project.");
+  if(typeof content!=="string"||content.length>2*1024*1024)throw new Error("New file content exceeds the 2 MB limit.");
+  const root=await realpath(projectPath);const target=path.resolve(root,relativePath);if(!inside(root,target))throw new Error("Path is outside the selected project.");
+  const parent=await realpath(path.dirname(target));if(!inside(root,parent))throw new Error("Parent folder is outside the selected project.");
+  const extension=path.extname(target).slice(1).toLowerCase();if(!textExtensions.has(extension))throw new Error("This file type cannot be created in the built-in editor.");
+  try{await lstat(target);throw new Error("A file already exists at this path. Use the approved overwrite tool instead.");}
+  catch(error){if((error as NodeJS.ErrnoException).code!=="ENOENT")throw error;}
+  await writeFile(target,content,{encoding:"utf8",flag:"wx"});return {saved:true,created:true};
+});
+
 ipcMain.handle("project:write-file", async (_event, projectPath: unknown, relativePath: unknown, content: unknown) => {
   if (typeof content !== "string" || content.length > 2 * 1024 * 1024) throw new Error("Invalid content or file exceeds the 2 MB editor limit.");
   const { target } = await safeProjectFile(projectPath, relativePath); const extension = path.extname(target).slice(1).toLowerCase();

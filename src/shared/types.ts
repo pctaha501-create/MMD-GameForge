@@ -33,6 +33,7 @@ export interface DesktopAPI {
   listProjectFiles(projectPath: string): Promise<ProjectFileNode[]>;
   readProjectFile(projectPath: string, relativePath: string): Promise<{ content: string; size: number }>;
   writeProjectFile(projectPath: string, relativePath: string, content: string): Promise<{ saved: boolean }>;
+  createProjectFile(projectPath:string,relativePath:string,content:string):Promise<{saved:boolean;created:boolean}>;
   listProjectAssets(projectPath: string): Promise<ProjectFileNode[]>;
   importAssets(projectPath: string): Promise<string[]>;
   readProjectAsset(projectPath: string, relativePath: string): Promise<Uint8Array>;

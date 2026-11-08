@@ -1,5 +1,5 @@
 "use strict";
-const ALLOWED = new Set(["project.list_files","project.read_file","project.write_file","scene.save","unreal.detect","unreal.launch"]);
+const ALLOWED = new Set(["project.list_files","project.read_file","project.write_file","project.create_file","scene.save","unreal.detect","unreal.launch"]);
 function object(value){return value!==null&&typeof value==="object"&&!Array.isArray(value)&&Object.getPrototypeOf(value)===Object.prototype;}
 function exactKeys(value,keys){return Object.keys(value).every(k=>keys.includes(k))&&keys.every(k=>Object.prototype.hasOwnProperty.call(value,k));}
 function relativePath(value){
@@ -20,6 +20,7 @@ function validateAIToolCall(value){
       if(!exactKeys(a,["path"])||!relativePath(a.path))return {ok:false,error:"Invalid project-relative file path."};
       break;
     case "project.write_file":
+    case "project.create_file":
       if(!exactKeys(a,["path","content"])||!relativePath(a.path)||typeof a.content!=="string"||a.content.length>2*1024*1024)return {ok:false,error:"Invalid file write request or content exceeds 2 MB."};
       break;
     case "scene.save":

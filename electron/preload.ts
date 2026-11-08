@@ -13,6 +13,7 @@ const api: DesktopAPI = {
   inspectProject: (projectPath) => ipcRenderer.invoke("project:inspect", projectPath) as Promise<ProjectSummary>,
   listProjectFiles: (projectPath) => ipcRenderer.invoke("project:files", projectPath) as Promise<ProjectFileNode[]>,
   readProjectFile: (projectPath, relativePath) => ipcRenderer.invoke("project:read-file", projectPath, relativePath) as Promise<{ content: string; size: number }>,
+  createProjectFile: (projectPath, relativePath, content) => ipcRenderer.invoke("project:create-file", projectPath, relativePath, content) as Promise<{ saved: boolean; created: boolean }>,
   writeProjectFile: (projectPath, relativePath, content) => ipcRenderer.invoke("project:write-file", projectPath, relativePath, content) as Promise<{ saved: boolean }>,
   listProjectAssets: (projectPath) => ipcRenderer.invoke("project:assets", projectPath) as Promise<ProjectFileNode[]>,
   importAssets: (projectPath) => ipcRenderer.invoke("project:import-assets", projectPath) as Promise<string[]>,
