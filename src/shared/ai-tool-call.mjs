@@ -1,4 +1,4 @@
-const ALLOWED = new Set(["project.list_files","project.read_file","project.write_file","project.create_file","scene.save","unreal.detect","unreal.validate_project","unreal.launch"]);
+const ALLOWED = new Set(["project.list_files","project.read_file","project.write_file","project.create_file","scene.save","unreal.detect","unreal.validate_project","unreal.create_project","unreal.launch"]);
 function object(value){return value!==null&&typeof value==="object"&&!Array.isArray(value)&&Object.getPrototypeOf(value)===Object.prototype;}
 function exactKeys(value,keys){return Object.keys(value).every(k=>keys.includes(k))&&keys.every(k=>Object.prototype.hasOwnProperty.call(value,k));}
 function relativePath(value){
@@ -15,6 +15,9 @@ export function validateAIToolCall(value){
     case "unreal.validate_project":
     case "unreal.launch":
       if(Object.keys(a).length!==0)return {ok:false,error:"This tool does not accept arguments."};
+      break;
+    case "unreal.create_project":
+      if(!exactKeys(a,["project_name"])||typeof a.project_name!=="string"||!/^[A-Za-z][A-Za-z0-9_]{1,47}$/.test(a.project_name))return {ok:false,error:"Invalid Unreal project name."};
       break;
     case "project.read_file":
       if(!exactKeys(a,["path"])||!relativePath(a.path))return {ok:false,error:"Invalid project-relative file path."};

@@ -25,6 +25,7 @@ const api: DesktopAPI = {
   saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings) as Promise<StudioSettings>,
   detectUnreal: (projectPath) => ipcRenderer.invoke("unreal:detect", projectPath) as Promise<UnrealStatus>,
   validateUnrealProject: (projectPath) => ipcRenderer.invoke("unreal:validate-project", projectPath) as Promise<{valid:boolean;projectFile:string|null;errors:string[];warnings:string[];modules:string[];sourceFiles:number;buildFiles:number;buildPerformed:false}>,
+  createUnrealProject: (projectPath,projectName) => ipcRenderer.invoke("unreal:create-project",projectPath,projectName) as Promise<{created:boolean;name:string;projectPath:string;projectFile:string;files:string[]}>,
   launchUnreal: (projectFile, editorPath) => ipcRenderer.invoke("unreal:launch", projectFile, editorPath) as Promise<boolean>,
 };
 

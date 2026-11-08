@@ -29,3 +29,8 @@ test("accepts safe new project file creation",()=>{
 test("accepts Unreal project validation without arguments",()=>{
  assert.equal(validateAIToolCall({schema_version:"mmd.tool-call.v1",tool:"unreal.validate_project",arguments:{}}).ok,true);
 });
+
+test("accepts a constrained Unreal project creation request",()=>{
+ assert.equal(validateAIToolCall({schema_version:"mmd.tool-call.v1",tool:"unreal.create_project",arguments:{project_name:"MyGame"}}).ok,true);
+ assert.equal(validateAIToolCall({schema_version:"mmd.tool-call.v1",tool:"unreal.create_project",arguments:{project_name:"../escape"}}).ok,false);
+});

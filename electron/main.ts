@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { mkdir, readdir, stat, lstat, readFile, writeFile, copyFile, realpath, access, rm } from "node:fs/promises";
+import { mkdir, readdir, stat, lstat, readFile, writeFile, copyFile, realpath, access, rm, rename } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:net";
@@ -408,6 +408,32 @@ ipcMain.handle("project:reveal", async (_event, projectPath: unknown, relativePa
 });
 ipcMain.handle("settings:get", () => readStudioSettings());
 ipcMain.handle("settings:save", (_event, value: unknown) => writeStudioSettings(value));
+
+
+ipcMain.handle("unreal:create-project",async(_event,rawRoot:unknown,rawName:unknown)=>{
+  if(typeof rawRoot!=="string"||!path.isAbsolute(rawRoot)||typeof rawName!=="string"||!/^[A-Za-z][A-Za-z0-9_]{1,47}$/.test(rawName))throw new Error("Project name must start with a letter and contain 2–48 letters, numbers or underscores.");
+  const root=await realpath(rawRoot);const name=rawName;
+  const parent=path.join(root,"UnrealProjects");const destination=path.join(parent,name);
+  if(!inside(root,destination))throw new Error("Unreal project destination is outside the active workspace.");
+  try{await lstat(destination);throw new Error("An Unreal project with this name already exists.");}
+  catch(error){if((error as NodeJS.ErrnoException).code!=="ENOENT")throw error;}
+  await mkdir(parent,{recursive:true});
+  const temp=path.join(root,".mmd-unreal-"+Date.now().toString(36));
+  await mkdir(temp,{recursive:false});
+  const files:Record<string,string>={
+    [name+".uproject"]:JSON.stringify({FileVersion:3,EngineAssociation:"",Category:"Games",Description:"Created with MMD GameForge.",Modules:[{Name:name,Type:"Runtime",LoadingPhase:"Default"}]},null,2)+"\\n",
+    ["Source/"+name+".Target.cs"]:`using UnrealBuildTool;\nusing System.Collections.Generic;\npublic class ${name}Target : TargetRules\n{\n    public ${name}Target(TargetInfo Target) : base(Target)\n    {\n        Type = TargetType.Game;\n        DefaultBuildSettings = BuildSettingsVersion.V5;\n        ExtraModuleNames.Add("${name}");\n    }\n}\n`,
+    ["Source/"+name+"Editor.Target.cs"]:`using UnrealBuildTool;\nusing System.Collections.Generic;\npublic class ${name}EditorTarget : TargetRules\n{\n    public ${name}EditorTarget(TargetInfo Target) : base(Target)\n    {\n        Type = TargetType.Editor;\n        DefaultBuildSettings = BuildSettingsVersion.V5;\n        ExtraModuleNames.Add("${name}");\n    }\n}\n`,
+    ["Source/"+name+"/"+name+".Build.cs"]:`using UnrealBuildTool;\npublic class ${name} : ModuleRules\n{\n    public ${name}(ReadOnlyTargetRules Target) : base(Target)\n    {\n        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;\n        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore" });\n    }\n}\n`,
+    ["Source/"+name+"/Private/"+name+".cpp"]:`#include "Modules/ModuleManager.h"\nIMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ${name}, "${name}");\n`,
+    ["README.md"]:`# ${name}\n\nUnreal Engine C++ project scaffold created by MMD GameForge.\n\nOpen ${name}.uproject with an installed Unreal Engine version, generate project files if prompted, then build the ${name}Editor target. This scaffold is a starting point, not a finished game.\n`
+  };
+  try{
+    for(const [relative,content] of Object.entries(files)){const target=path.join(temp,relative);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,content,{encoding:"utf8",flag:"wx"});}
+    await rename(temp,destination);
+    return {created:true,name,projectPath:destination,projectFile:path.join(destination,name+".uproject"),files:Object.keys(files)};
+  }catch(error){await rm(temp,{recursive:true,force:true});throw error;}
+});
 
 ipcMain.handle("unreal:validate-project",async(_event,rawProjectPath:unknown)=>{
   if(typeof rawProjectPath!=="string"||!path.isAbsolute(rawProjectPath))throw new Error("Invalid project folder.");
