@@ -1,30 +1,30 @@
 ## Phase 02 — Desktop workspace
 
-See [PHASE_02_WORKSPACE.md](./PHASE_02_WORKSPACE.md). Production acceptance remains subject to CI and on-device validation.
+See [PHASE_02_WORKSPACE.md](./PHASE_02_WORKSPACE.md). Production acceptance requires CI and on-device validation.
 
-## MCT-01 — MMD Cloud Training foundation
+## MCT-01 — Cloud foundation
 
 See [MMD_CLOUD_TRAINING_ARCHITECTURE.md](./MMD_CLOUD_TRAINING_ARCHITECTURE.md).
 
-## MCT-02 — Executable cloud training runner
+## MCT-02 — Executable cloud runner
 
-See [MCT_02_CLOUD_RUNNER.md](./MCT_02_CLOUD_RUNNER.md). Adds a from-scratch tokenizer and Transformer runner, resumable checkpoints, Kaggle/Colab notebooks and automated checks.
+See [MCT_02_CLOUD_RUNNER.md](./MCT_02_CLOUD_RUNNER.md).
 
 ## MCT-03 — Dataset Studio
 
-See [MCT_03_DATASET_STUDIO.md](./MCT_03_DATASET_STUDIO.md). Adds JSONL ingestion, Unicode normalization, duplicate removal, deterministic document-level train/validation/test splits, language distribution reports, and provenance hashes. Also hardens the trainer against empty/undersized evaluation splits.
+See [MCT_03_DATASET_STUDIO.md](./MCT_03_DATASET_STUDIO.md).
 
-## MCT-04 — Model factory and experiment management
+## MCT-04 — Model Factory and experiment registry
 
-Add configurable model families, tokenizer evaluation, parameter/VRAM estimates, experiment tracking, and model registry integration. Validate pilot architecture against actual free-tier GPU memory before scaling.
+See [MCT_04_MODEL_FACTORY.md](./MCT_04_MODEL_FACTORY.md). Adds reproducible multilingual/code/game-design config profiles, parameter and lower-bound memory estimation, and a local SQLite registry for experiments, metrics and artifact hashes. Estimates are not VRAM fit guarantees.
 
-## MCT-05 — Training evaluation and application integration
+## MCT-05 — Evaluation and application integration
 
-Add benchmark suites, generation/evaluation tools, portable inference runtime, model import/export, and explicit connection between trained model artifacts and the desktop AI Core.
+Add task-specific benchmarks, controlled generation evaluation, model export/verification, and a secure connection between trained artifacts and the desktop AI Core.
 
-## AI Core — Desktop runtime hardening
+## AI Core completion
 
-The current local character MLP is only a tiny research baseline. Expand model registry, checkpoint validation, training controls, inference API and UI only after architecture/resource requirements are measured. Do not label the assistant complete until it can reliably perform the advertised game-development tasks.
+The existing local character-level MLP remains a research baseline, not a complete assistant. Completion requires real task-specific models, measured training runs, reliable inference, Unreal/game-development workflows, error handling and end-to-end tests.
 
 ## Phase 03 — 3D Scene Editor
 
