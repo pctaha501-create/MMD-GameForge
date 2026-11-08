@@ -6,12 +6,15 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
 
-test("MCT training job contract is versioned and rejects implicit paid fallback", () => {
+test("MCT training job contract is versioned, random-init only, and rejects paid fallback", () => {
   const schema = readJson("cloud/contracts/training-job.schema.json");
   assert.equal(schema.properties.schema_version.const, "mct.training-job.v1");
   assert.deepEqual(schema.properties.provider_policy.properties.allow_paid_fallback, { const: false });
   assert.deepEqual(schema.properties.provider_policy.properties.user_started, { const: true });
   assert.equal(schema.properties.model.properties.initialization.const, "random");
+  const configPathPattern = new RegExp(schema.properties.model.properties.config_path.pattern);
+  assert.equal(configPathPattern.test("cloud/configs/mmd-multilingual-pilot.json"), true);
+  assert.equal(configPathPattern.test("cloud/configs/mmd-multilingual-pilot.yaml"), false);
 });
 
 test("MCT checkpoint contract records random initialization and artifact hashes", () => {
