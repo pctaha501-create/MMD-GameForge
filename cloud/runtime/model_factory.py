@@ -42,7 +42,7 @@ PROFILES = {
     "code-tiny": ("MMD-Code-Tiny", 12000, 256, 192, 3, 6, 800),
     "game-design-tiny": ("MMD-GameDesign-Tiny", 12000, 256, 192, 3, 6, 800),
     "game-agent-tiny": ("MMD-Game-Agent-Tiny", 12000, 512, 192, 4, 6, 1000),
-    # ~1.023B parameters with tied embeddings; designed for a memory-optimized 14 GiB+ cloud GPU.
+    # ~1.023B parameters with tied embeddings; designed for a memory-optimized 24 GiB+ cloud GPU.
     "bilingual-base-1b": ("MMD-Base-1B-Bilingual", 32000, 256, 2048, 19, 16, 1000),
 }
 
@@ -89,8 +89,8 @@ def create_config(profile: str, seed: int | None = None) -> dict:
                                   micro_batch_size=1, gradient_accumulation_steps=16,
                                   precision="auto", checkpoint_interval_steps=25,
                                   evaluation_interval_steps=50)
-        config["resource_policy"].update(require_cuda=True, minimum_gpu_memory_gib=14,
-                                         hardware_note="8-bit AdamW state lower bound is about 9.53 GiB before activations and runtime overhead; gradient checkpointing reduces activation memory. 14 GiB is a minimum preflight, not a fit guarantee.")
+        config["resource_policy"].update(require_cuda=True, minimum_gpu_memory_gib=24,
+                                         hardware_note="8-bit AdamW state lower bound is about 9.53 GiB before activations and runtime overhead; gradient checkpointing reduces activation memory. 24 GiB is a conservative minimum preflight, not a fit guarantee.")
     config["training"]["checkpoint_interval_steps"] = min(100, max(10, steps // 10))
     config["training"]["evaluation_interval_steps"] = config["training"]["checkpoint_interval_steps"]
     if profile == "bilingual-base-1b":

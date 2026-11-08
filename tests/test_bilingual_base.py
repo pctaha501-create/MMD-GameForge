@@ -20,7 +20,7 @@ class BilingualBaseTests(unittest.TestCase):
         self.assertEqual(config["tokenizer"]["languages"], ["fa", "en"])
         self.assertEqual(estimate["total_parameters"], 1_022_871_552)
         self.assertTrue(config["resource_policy"]["require_cuda"])
-        self.assertGreaterEqual(config["resource_policy"]["minimum_gpu_memory_gib"], 14)
+        self.assertGreaterEqual(config["resource_policy"]["minimum_gpu_memory_gib"], 24)
 
     def test_job_requires_both_supported_languages_and_rejects_others(self):
         config = create_config("bilingual-base-1b", 20261108)

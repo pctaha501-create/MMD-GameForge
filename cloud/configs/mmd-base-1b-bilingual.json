@@ -62,7 +62,7 @@
     "user_started_sessions_only": true,
     "save_checkpoint_before_runtime_limit": true,
     "require_cuda": true,
-    "minimum_gpu_memory_gib": 14,
+    "minimum_gpu_memory_gib": 24,
     "hardware_note": "8-bit AdamW state lower bound is about 9.53 GiB before activations and runtime overhead; gradient checkpointing reduces activation memory. 14 GiB is a minimum preflight, not a fit guarantee."
   }
 }

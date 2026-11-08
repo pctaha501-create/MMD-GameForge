@@ -30,7 +30,7 @@ class ModelFactoryTests(unittest.TestCase):
         self.assertLess(estimate["total_parameters"],1_050_000_000)
         self.assertEqual(estimate["total_parameters"],1_022_871_552)
         self.assertTrue(config["resource_policy"]["require_cuda"])
-        self.assertEqual(config["resource_policy"]["minimum_gpu_memory_gib"],14)
+        self.assertEqual(config["resource_policy"]["minimum_gpu_memory_gib"],24)
         self.assertEqual(config["training"]["optimizer"],"adamw_8bit")
         self.assertTrue(config["training"]["gradient_checkpointing"])
 
