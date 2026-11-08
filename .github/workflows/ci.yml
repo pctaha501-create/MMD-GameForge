@@ -31,8 +31,8 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Validate cloud Python syntax
-        run: python -m py_compile cloud/runtime/validate.py cloud/runtime/train.py
+      - name: Validate all cloud Python modules
+        run: python -m py_compile cloud/runtime/*.py
       - name: Run cloud runtime tests
         run: python -m unittest discover -s tests -p "test_*.py"
       - name: Type-check
