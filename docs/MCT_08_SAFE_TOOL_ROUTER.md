@@ -20,6 +20,7 @@ MCT-08 connects structured model proposals to a small allowlisted set of desktop
 - `project.write_file`: overwrite a supported text file.
 - `scene.save`: save a validated GameForge scene JSON document.
 - `unreal.detect`: inspect whether Unreal Editor and a .uproject are available.
+- `unreal.validate_project`: read-only validation of the root .uproject JSON, module declarations, Source files and module Build.cs files. It does not compile or launch Unreal.
 - `unreal.launch`: launch the active .uproject in a detected Unreal Editor after confirmation.
 
 ## Safety rules
