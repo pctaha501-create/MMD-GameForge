@@ -190,7 +190,7 @@ function renderAIToolProposal(output:string):void {
   const root=document.querySelector<HTMLDivElement>("#ai-tool-proposal");if(!root)return;
   const parsed=parseAIToolCall(output);const result=validateAIToolCall(parsed);
   if(!result.ok){root.hidden=true;root.innerHTML="";return;}
-  const labels:Record<string,string>={"project.list_files":"List project files","project.read_file":"Read project file","project.write_file":"Overwrite project file","project.create_file":"Create project file","scene.save":"Save scene","unreal.detect":"Detect Unreal Engine","unreal.validate_project":"Validate Unreal project structure","unreal.create_project":"Create Unreal C++ project scaffold","unreal.launch":"Launch Unreal Editor"};
+  const labels:Record<string,string>={"project.list_files":"List project files","project.read_file":"Read project file","project.write_file":"Overwrite project file","project.create_file":"Create project file","scene.save":"Save scene","unreal.detect":"Detect Unreal Engine","unreal.validate_project":"Validate Unreal project structure","unreal.create_project":"Create Unreal C++ project scaffold","unreal.build_project":"Build Unreal project with UnrealBuildTool","unreal.launch":"Launch Unreal Editor"};
   root.hidden=false;
   root.innerHTML=`<div class="ai-tool-proposal-head"><b>Proposed GameForge action</b><span>USER APPROVAL REQUIRED</span></div><p>${escapeHtml(labels[result.value.tool]??result.value.tool)}</p><code>${escapeHtml(JSON.stringify(result.value.arguments,null,2))}</code><button class="button button-primary" id="ai-run-tool">Review and run action</button><small>Nothing has been changed. This allowlisted action runs only after you approve it.</small>`;
   root.querySelector("#ai-run-tool")?.addEventListener("click",()=>void executeAITool(result.value));
@@ -224,6 +224,9 @@ async function executeAITool(call:{tool:string;arguments:Record<string,unknown>}
       case "unreal.create_project":
         if(!window.confirm(`Create Unreal C++ project ${String(a.project_name)} inside the active workspace?`))return;
         value=await window.gameForge.createUnrealProject(project.path,String(a.project_name));break;
+      case "unreal.build_project":
+        if(!window.confirm("Run UnrealBuildTool to compile the active Unreal project for Win64 Development? This may take several minutes."))return;
+        value=await window.gameForge.buildUnrealProject(project.path);break;
       case "unreal.launch":{
         const status=await window.gameForge.detectUnreal(project.path);
         if(!status.projectFile)throw new Error("No .uproject file was found in the active project.");
@@ -283,7 +286,7 @@ function bindAIEvents():void {
     if(!prompt.trim()){notify("Enter a prompt first.","error");return;}
     if(button){button.disabled=true;button.textContent="Generating…";}
     if(output)output.textContent="The local model is generating…";
-    try{const projectContext=activeProject?`Active project: ${activeProject.name}. Project tools operate only inside this folder.\n`:"No active project is open. Do not propose project tools.\n";const systemPrompt=`You are MMD GameForge AI. Help with Unreal game development. You may answer normally. If you need a project action, output exactly one JSON object using schema_version "mmd.tool-call.v1", an allowlisted tool, and arguments. Allowed tools: project.list_files {}, project.read_file {path}, project.write_file {path,content}, project.create_file {path,content}, scene.save {scene_name,content}, unreal.detect {}, unreal.validate_project {}, unreal.create_project {project_name}, unreal.launch {}. Never output shell commands or arbitrary code execution requests.\n${projectContext}User request: ${prompt}`;const result=await window.gameForge.generateWithModel(modelId,systemPrompt,{maxNewTokens:128,temperature:.8,topK:40});if(output)output.textContent=result.output||"(The model returned an empty response.)";renderAIToolProposal(result.output);notify(`Generated with ${result.modelFamily} on ${result.device}.`);}
+    try{const projectContext=activeProject?`Active project: ${activeProject.name}. Project tools operate only inside this folder.\n`:"No active project is open. Do not propose project tools.\n";const systemPrompt=`You are MMD GameForge AI. Help with Unreal game development. You may answer normally. If you need a project action, output exactly one JSON object using schema_version "mmd.tool-call.v1", an allowlisted tool, and arguments. Allowed tools: project.list_files {}, project.read_file {path}, project.write_file {path,content}, project.create_file {path,content}, scene.save {scene_name,content}, unreal.detect {}, unreal.validate_project {}, unreal.create_project {project_name}, unreal.build_project {}, unreal.launch {}. Never output shell commands or arbitrary code execution requests.\n${projectContext}User request: ${prompt}`;const result=await window.gameForge.generateWithModel(modelId,systemPrompt,{maxNewTokens:128,temperature:.8,topK:40});if(output)output.textContent=result.output||"(The model returned an empty response.)";renderAIToolProposal(result.output);notify(`Generated with ${result.modelFamily} on ${result.device}.`);}
     catch(error){if(output)output.textContent=error instanceof Error?error.message:"Generation failed.";notify(error instanceof Error?error.message:"Generation failed.","error");}
     finally{if(button){button.disabled=false;button.textContent="Generate response";}}
   });

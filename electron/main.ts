@@ -481,6 +481,46 @@ ipcMain.handle("unreal:detect", async (_event, projectPath: unknown) => {
   const root = await realpath(projectPath); const entries = await readdir(root, { withFileTypes: true }); const descriptor = entries.find(x => x.isFile() && x.name.toLowerCase().endsWith(".uproject")); const settings = await readStudioSettings();
   const editorPath = await findUnrealEditor(settings.unrealEditorPath); return { installed: !!editorPath, editorPath, projectFile: descriptor ? path.join(root, descriptor.name) : null } satisfies UnrealStatus;
 });
+
+ipcMain.handle("unreal:build-project",async(_event,rawProjectPath:unknown)=>{
+  if(process.platform!=="win32")throw new Error("Automated UnrealBuildTool invocation is currently supported on Windows only.");
+  if(typeof rawProjectPath!=="string"||!path.isAbsolute(rawProjectPath))throw new Error("Invalid project path.");
+  const root=await realpath(rawProjectPath);
+  const entries=await readdir(root,{withFileTypes:true});
+  const descriptor=entries.find(x=>x.isFile()&&x.name.toLowerCase().endsWith(".uproject"));
+  if(!descriptor)throw new Error("No .uproject file was found at the project root.");
+  const projectFile=path.join(root,descriptor.name);
+  const projectName=path.basename(descriptor.name,".uproject");
+  const settings=await readStudioSettings();
+  const editorPath=await findUnrealEditor(settings.unrealEditorPath);
+  if(!editorPath)throw new Error("Unreal Editor was not detected. Configure the editor path in Settings.");
+  const engineRoot=path.resolve(path.dirname(editorPath),"..","..");
+  const ubtRoot=path.join(engineRoot,"Binaries","DotNET","UnrealBuildTool");
+  const ubtExe=path.join(ubtRoot,"UnrealBuildTool.exe");
+  const ubtDll=path.join(ubtRoot,"UnrealBuildTool.dll");
+  let executable:string,args:string[];
+  try{await access(ubtExe);executable=ubtExe;args=[projectName+"Editor","Win64","Development",`-Project=${projectFile}`,"-WaitMutex","-NoHotReloadFromIDE"];}
+  catch{
+    try{await access(ubtDll);executable="dotnet";args=[ubtDll,projectName+"Editor","Win64","Development",`-Project=${projectFile}`,"-WaitMutex","-NoHotReloadFromIDE"];}
+    catch{throw new Error("UnrealBuildTool was not found beside the detected Unreal Engine installation.");}
+  }
+  const started=Date.now();
+  return await new Promise((resolve,reject)=>{
+    const child=spawn(executable,args,{cwd:root,windowsHide:true,shell:false,stdio:["ignore","pipe","pipe"]});
+    let stdout="",stderr="",settled=false;
+    const finish=(error?:Error,code?:number|null)=>{
+      if(settled)return;settled=true;clearTimeout(timer);
+      if(error){child.kill();reject(error);return;}
+      resolve({success:code===0,exitCode:code??null,projectFile,elapsedMs:Date.now()-started,stdout:stdout.slice(-120000),stderr:stderr.slice(-120000)});
+    };
+    const timer=setTimeout(()=>finish(new Error("UnrealBuildTool exceeded the 30-minute build limit.")),30*60*1000);
+    child.once("error",error=>finish(new Error("Could not start UnrealBuildTool: "+error.message)));
+    child.once("exit",code=>finish(undefined,code));
+    child.stdout?.on("data",(chunk:Buffer)=>{stdout=(stdout+chunk.toString()).slice(-120000);});
+    child.stderr?.on("data",(chunk:Buffer)=>{stderr=(stderr+chunk.toString()).slice(-120000);});
+  });
+});
+
 ipcMain.handle("unreal:launch", async (_event, projectFile: unknown, editorPath?: unknown) => {
   if (typeof projectFile !== "string" || !path.isAbsolute(projectFile) || path.extname(projectFile).toLowerCase() !== ".uproject") throw new Error("Invalid Unreal project descriptor.");
   await access(projectFile);

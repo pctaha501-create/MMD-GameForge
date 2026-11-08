@@ -27,6 +27,7 @@ const api: DesktopAPI = {
   validateUnrealProject: (projectPath) => ipcRenderer.invoke("unreal:validate-project", projectPath) as Promise<{valid:boolean;projectFile:string|null;errors:string[];warnings:string[];modules:string[];sourceFiles:number;buildFiles:number;buildPerformed:false}>,
   createUnrealProject: (projectPath,projectName) => ipcRenderer.invoke("unreal:create-project",projectPath,projectName) as Promise<{created:boolean;name:string;projectPath:string;projectFile:string;files:string[]}>,
   launchUnreal: (projectFile, editorPath) => ipcRenderer.invoke("unreal:launch", projectFile, editorPath) as Promise<boolean>,
+  buildUnrealProject: (projectPath) => ipcRenderer.invoke("unreal:build-project",projectPath) as Promise<{success:boolean;exitCode:number|null;projectFile:string;elapsedMs:number;stdout:string;stderr:string}>,
 };
 
 contextBridge.exposeInMainWorld("gameForge", api);
