@@ -25,3 +25,7 @@ test("validates scene structure before offering save",()=>{
 test("accepts safe new project file creation",()=>{
  assert.equal(validateAIToolCall({schema_version:"mmd.tool-call.v1",tool:"project.create_file",arguments:{path:"Source/NewActor.cpp",content:"// new file"}}).ok,true);
 });
+
+test("accepts Unreal project validation without arguments",()=>{
+ assert.equal(validateAIToolCall({schema_version:"mmd.tool-call.v1",tool:"unreal.validate_project",arguments:{}}).ok,true);
+});

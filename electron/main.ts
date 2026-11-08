@@ -408,6 +408,42 @@ ipcMain.handle("project:reveal", async (_event, projectPath: unknown, relativePa
 });
 ipcMain.handle("settings:get", () => readStudioSettings());
 ipcMain.handle("settings:save", (_event, value: unknown) => writeStudioSettings(value));
+
+ipcMain.handle("unreal:validate-project",async(_event,rawProjectPath:unknown)=>{
+  if(typeof rawProjectPath!=="string"||!path.isAbsolute(rawProjectPath))throw new Error("Invalid project folder.");
+  const root=await realpath(rawProjectPath);
+  const candidates=(await readdir(root,{withFileTypes:true})).filter(entry=>entry.isFile()&&entry.name.toLowerCase().endsWith(".uproject"));
+  if(candidates.length!==1)return {valid:false,projectFile:null,errors:[candidates.length?"Multiple .uproject files found at project root.":"No .uproject file found at project root."],warnings:[],modules:[],sourceFiles:0};
+  const projectFile=path.join(root,candidates[0].name);let projectJson:Record<string,unknown>;
+  try{projectJson=JSON.parse(await readFile(projectFile,"utf8")) as Record<string,unknown>;}
+  catch{return {valid:false,projectFile:candidates[0].name,errors:["The .uproject file is not valid JSON."],warnings:[],modules:[],sourceFiles:0};}
+  const errors:string[]=[],warnings:string[]=[];
+  if(!Array.isArray(projectJson.Modules)||projectJson.Modules.length===0)errors.push("The .uproject file has no Modules array.");
+  const modules=Array.isArray(projectJson.Modules)?projectJson.Modules.filter((x):x is Record<string,unknown>=>!!x&&typeof x==="object"&&!Array.isArray(x)): [];
+  for(const mod of modules){if(typeof mod.Name!=="string"||!mod.Name.trim())errors.push("A module entry has no valid Name.");}
+  const sourceRoot=path.join(root,"Source");
+  try{await access(sourceRoot);}catch{errors.push("The project has no Source directory.");}
+  const sourceFiles:string[]=[];const buildFiles:string[]=[];
+  async function scan(folder:string,depth:number):Promise<void>{
+    if(depth>8)return;
+    let entries;try{entries=await readdir(folder,{withFileTypes:true});}catch{return;}
+    for(const entry of entries){
+      if(entry.isSymbolicLink()||[".git","Binaries","Intermediate","Saved","DerivedDataCache","node_modules"].includes(entry.name))continue;
+      const full=path.join(folder,entry.name);
+      if(entry.isDirectory())await scan(full,depth+1);
+      else if(entry.isFile()){if(/\.(h|hpp|cpp|c|cs)$/i.test(entry.name))sourceFiles.push(full);if(/\.Build\.cs$/i.test(entry.name))buildFiles.push(full);}
+    }
+  }
+  await scan(sourceRoot,0);
+  if(modules.length&&buildFiles.length===0)errors.push("No module .Build.cs file was found under Source.");
+  if(sourceFiles.length===0)warnings.push("No C++ or C# source files were found under Source.");
+  for(const mod of modules){
+    const name=String(mod.Name??"");
+    if(name&&!buildFiles.some(file=>path.basename(file).toLowerCase()===name.toLowerCase()+".build.cs"))warnings.push("No matching "+name+".Build.cs module file was found.");
+  }
+  return {valid:errors.length===0,projectFile:candidates[0].name,errors,warnings,modules:modules.map(x=>String(x.Name??"")),sourceFiles:sourceFiles.length,buildFiles:buildFiles.length,buildPerformed:false};
+});
+
 ipcMain.handle("unreal:detect", async (_event, projectPath: unknown) => {
   if (typeof projectPath !== "string" || !path.isAbsolute(projectPath)) throw new Error("Invalid project path.");
   const root = await realpath(projectPath); const entries = await readdir(root, { withFileTypes: true }); const descriptor = entries.find(x => x.isFile() && x.name.toLowerCase().endsWith(".uproject")); const settings = await readStudioSettings();

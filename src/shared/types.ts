@@ -43,6 +43,7 @@ export interface DesktopAPI {
   getSettings(): Promise<StudioSettings>;
   saveSettings(settings: StudioSettings): Promise<StudioSettings>;
   detectUnreal(projectPath: string): Promise<UnrealStatus>;
+  validateUnrealProject(projectPath:string):Promise<{valid:boolean;projectFile:string|null;errors:string[];warnings:string[];modules:string[];sourceFiles:number;buildFiles:number;buildPerformed:false}>;
   launchUnreal(projectFile: string, editorPath?: string): Promise<boolean>;
 }
 
