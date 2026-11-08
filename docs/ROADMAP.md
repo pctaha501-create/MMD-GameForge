@@ -1,7 +1,3 @@
-## Phase 02 — Desktop workspace
-
-See [PHASE_02_WORKSPACE.md](./PHASE_02_WORKSPACE.md). Production acceptance requires CI and on-device validation.
-
 ## MCT-01 — Cloud foundation
 
 See [MMD_CLOUD_TRAINING_ARCHITECTURE.md](./MMD_CLOUD_TRAINING_ARCHITECTURE.md).
@@ -16,15 +12,19 @@ See [MCT_03_DATASET_STUDIO.md](./MCT_03_DATASET_STUDIO.md).
 
 ## MCT-04 — Model Factory and experiment registry
 
-See [MCT_04_MODEL_FACTORY.md](./MCT_04_MODEL_FACTORY.md). Adds reproducible multilingual/code/game-design config profiles, parameter and lower-bound memory estimation, and a local SQLite registry for experiments, metrics and artifact hashes. Estimates are not VRAM fit guarantees.
+See [MCT_04_MODEL_FACTORY.md](./MCT_04_MODEL_FACTORY.md).
 
-## MCT-05 — Evaluation and application integration
+## MCT-05 — Evaluation and portable bundles
 
-Add task-specific benchmarks, controlled generation evaluation, model export/verification, and a secure connection between trained artifacts and the desktop AI Core.
+See [MCT_05_EVALUATION_AND_BUNDLES.md](./MCT_05_EVALUATION_AND_BUNDLES.md). Adds lineage-verified held-out evaluation, optional human-review generation benchmarks and portable checkpoint bundles. No model is automatically declared production-ready.
+
+## MCT-06 — Desktop model integration
+
+Add secure model bundle import, model inventory, compatibility checks, inference backend selection, generation controls and task-specific AI workflows. Require real trained artifacts and hardware profiling before enabling a model in the app.
 
 ## AI Core completion
 
-The existing local character-level MLP remains a research baseline, not a complete assistant. Completion requires real task-specific models, measured training runs, reliable inference, Unreal/game-development workflows, error handling and end-to-end tests.
+The current desktop AI screen is still an architecture placeholder, not a completed assistant. Full completion requires MCT-06, actual trained artifacts, robust inference, Unreal/game-development workflows, error handling and end-to-end acceptance tests.
 
 ## Phase 03 — 3D Scene Editor
 
