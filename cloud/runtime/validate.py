@@ -33,8 +33,12 @@ def validate_config(config: dict) -> None:
     if config.get("stage") == "base-test":
         if config.get("resource_policy", {}).get("require_cuda") is not True:
             raise ValueError("The 1B Base model must train on cloud CUDA; CPU fallback is disabled.")
-        if float(config.get("resource_policy", {}).get("minimum_gpu_memory_gib", 0)) < 24:
-            raise ValueError("The 1B Base model requires a declared 24 GiB GPU preflight minimum.")
+        if float(config.get("resource_policy", {}).get("minimum_gpu_memory_gib", 0)) < 14:
+            raise ValueError("The 1B Base model requires a declared 14 GiB GPU preflight minimum.")
+        if config.get("training", {}).get("optimizer") != "adamw_8bit":
+            raise ValueError("The 1B Base test profile must use 8-bit AdamW to reduce optimizer memory.")
+        if config.get("training", {}).get("gradient_checkpointing") is not True:
+            raise ValueError("The 1B Base test profile must enable gradient checkpointing.")
     train = config.get("training", {})
     for key in ("max_steps", "micro_batch_size", "gradient_accumulation_steps", "checkpoint_interval_steps"):
         if not isinstance(train.get(key), int) or train[key] < 1:

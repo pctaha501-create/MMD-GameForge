@@ -67,7 +67,8 @@ def estimate_parameters(config: dict) -> dict:
         "transformer_parameters": layers * per_layer,
         "output_head_parameters": lm_head,
         "fp32_weights_mib": total * 4 / 1024**2,
-        "adamw_training_state_mib_lower_bound": total * 16 / 1024**2,
+        "optimizer_training_state_mib_lower_bound": total * (10 if config.get("training", {}).get("optimizer") == "adamw_8bit" else 16) / 1024**2,
+        "adamw_training_state_mib_lower_bound": total * (10 if config.get("training", {}).get("optimizer") == "adamw_8bit" else 16) / 1024**2,
         "activation_estimate_note": "Activation memory, CUDA workspace, fragmentation and framework overhead are additional; this is not a VRAM fit guarantee."
     }
 
@@ -84,11 +85,12 @@ def create_config(profile: str, seed: int | None = None) -> dict:
     if profile == "bilingual-base-1b":
         config["stage"] = "base-test"
         config["description"] = "Approximately 1.023B-parameter Persian/English decoder-only Transformer; random initialization only. Requires a compatible cloud GPU and is a test baseline, not a trained model."
-        config["training"].update(micro_batch_size=1, gradient_accumulation_steps=16,
+        config["training"].update(optimizer="adamw_8bit", gradient_checkpointing=True,
+                                  micro_batch_size=1, gradient_accumulation_steps=16,
                                   precision="auto", checkpoint_interval_steps=25,
                                   evaluation_interval_steps=50)
-        config["resource_policy"].update(require_cuda=True, minimum_gpu_memory_gib=24,
-                                         hardware_note="AdamW state lower bound is about 15.25 GiB before activations and runtime overhead; 24 GiB is a minimum preflight, not a fit guarantee.")
+        config["resource_policy"].update(require_cuda=True, minimum_gpu_memory_gib=14,
+                                         hardware_note="8-bit AdamW state lower bound is about 9.53 GiB before activations and runtime overhead; gradient checkpointing reduces activation memory. 14 GiB is a minimum preflight, not a fit guarantee.")
     config["training"]["checkpoint_interval_steps"] = min(100, max(10, steps // 10))
     config["training"]["evaluation_interval_steps"] = config["training"]["checkpoint_interval_steps"]
     if profile == "bilingual-base-1b":

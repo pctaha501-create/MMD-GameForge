@@ -31,7 +31,7 @@
   },
   "training": {
     "objective": "causal_language_modeling_next_token_prediction",
-    "optimizer": "adamw",
+    "optimizer": "adamw_8bit",
     "learning_rate": 0.0001,
     "weight_decay": 0.1,
     "warmup_steps": 100,
@@ -42,7 +42,8 @@
     "precision": "auto",
     "checkpoint_interval_steps": 25,
     "evaluation_interval_steps": 50,
-    "resume_from_checkpoint": true
+    "resume_from_checkpoint": true,
+    "gradient_checkpointing": true
   },
   "data": {
     "require_license_record": true,
@@ -61,7 +62,7 @@
     "user_started_sessions_only": true,
     "save_checkpoint_before_runtime_limit": true,
     "require_cuda": true,
-    "minimum_gpu_memory_gib": 24,
-    "hardware_note": "AdamW state lower bound is about 15.25 GiB before activations and runtime overhead; 24 GiB is a minimum preflight, not a fit guarantee."
+    "minimum_gpu_memory_gib": 14,
+    "hardware_note": "8-bit AdamW state lower bound is about 9.53 GiB before activations and runtime overhead; gradient checkpointing reduces activation memory. 14 GiB is a minimum preflight, not a fit guarantee."
   }
 }

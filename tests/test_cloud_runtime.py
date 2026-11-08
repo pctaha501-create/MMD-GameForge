@@ -23,6 +23,8 @@ class CloudRuntimeValidationTests(unittest.TestCase):
         base = json.loads((ROOT / "cloud/configs/mmd-base-1b-bilingual.json").read_text(encoding="utf-8"))
         validate_config(base)
         self.assertEqual(set(base["tokenizer"]["languages"]), {"fa", "en"})
+        self.assertEqual(base["training"]["optimizer"], "adamw_8bit")
+        self.assertTrue(base["training"]["gradient_checkpointing"])
         bad = json.loads(json.dumps(base))
         bad["tokenizer"]["languages"].append("de")
         with self.assertRaisesRegex(ValueError, "only Persian"):
