@@ -59,3 +59,11 @@
 .ai-chat-actions{display:flex;align-items:center;gap:14px}
 .ai-chat-actions span{font-size:11px;color:var(--muted,#9299aa)}
 .ai-chat pre{white-space:pre-wrap;overflow-wrap:anywhere;min-height:100px;max-height:360px;overflow:auto;padding:14px;border-radius:10px;background:#080d15;color:#dce4f3;font:12px/1.7 ui-monospace,monospace}
+
+.ai-tool-proposal{padding:16px;border:1px solid rgba(166,143,255,.32);border-radius:12px;background:rgba(142,119,255,.06)}
+.ai-tool-proposal-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ai-tool-proposal-head b{font-size:13px}
+.ai-tool-proposal-head span{font-size:9px;letter-spacing:.1em;color:#e8bd77}
+.ai-tool-proposal p{margin:12px 0;font-size:12px}
+.ai-tool-proposal code{display:block;max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:10px;border-radius:8px;background:#080d15;font-size:11px;color:#dce4f3}
+.ai-tool-proposal small{display:block;margin-top:9px;color:var(--muted,#9299aa);font-size:10px}

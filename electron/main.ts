@@ -342,7 +342,7 @@ ipcMain.handle("project:read-file", async (_event, projectPath: unknown, relativ
 });
 
 ipcMain.handle("project:create-file",async(_event,projectPath:unknown,relativePath:unknown,content:unknown)=>{
-  if(typeof projectPath!=="string"||!path.isAbsolute(projectPath)||typeof relativePath!=="string"||!relativePath||path.isAbsolute(relativePath))throw new Error("Invalid project file path.");
+  if(typeof projectPath!=="string"||!path.isAbsolute(projectPath)||typeof relativePath!=="string"||!relativePath||path.isAbsolute(relativePath)||/^[a-zA-Z]:/.test(relativePath))throw new Error("Invalid project file path.");
   if(relativePath.split(/[\\/]/).some(part=>!part||part==="."||part===".."))throw new Error("Project file path must stay inside the project.");
   if(typeof content!=="string"||content.length>2*1024*1024)throw new Error("New file content exceeds the 2 MB limit.");
   const root=await realpath(projectPath);const target=path.resolve(root,relativePath);if(!inside(root,target))throw new Error("Path is outside the selected project.");
