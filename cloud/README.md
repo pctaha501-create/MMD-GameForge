@@ -25,7 +25,7 @@ Cloud-only first-party training for MMD GameForge. The current test target is **
 
 3. Review `mmd-dataset/report.json` and `provenance.json`. Confirm the source, license, language counts and document splits. Do not label data as licensed unless you have verified the rights.
 4. Upload `corpus.txt` and `provenance.json` as a private Kaggle dataset, then open `notebooks/kaggle-multilingual.ipynb` and start the session manually with a GPU. Colab users can follow `notebooks/colab-multilingual.ipynb`.
-5. The notebook checks for CUDA and a 24 GiB minimum preflight, then runs the random-initialized model. Save the output directory/checkpoints to persistent storage before the hosted session ends.
+5. The shared trainer checks for CUDA and a 24 GiB minimum preflight, then runs the random-initialized model. Save the output directory/checkpoints to persistent storage before the hosted session ends.
 6. Run held-out evaluation and bundle verification before importing anything into the desktop app.
 
 Important: the 1B Base model has an estimated 8-bit AdamW training-state lower bound of about 9.53 GiB before activations and framework overhead. The 24 GiB GPU check is a conservative preflight, not a promise that a free runtime will fit or be available. No pretrained weights, hosted inference APIs, hidden workers, paid fallback or quota evasion. Free GPU availability is not guaranteed. Automated metadata checks do not grant data rights; human review is mandatory. Benchmark smoke scores do not certify production quality.
