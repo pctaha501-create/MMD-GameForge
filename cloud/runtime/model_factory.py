@@ -42,7 +42,7 @@ PROFILES = {
     "code-tiny": ("MMD-Code-Tiny", 12000, 256, 192, 3, 6, 800),
     "game-design-tiny": ("MMD-GameDesign-Tiny", 12000, 256, 192, 3, 6, 800),
     "game-agent-tiny": ("MMD-Game-Agent-Tiny", 12000, 512, 192, 4, 6, 1000),
-    # ~1.023B parameters with tied embeddings; designed for a 24 GiB+ cloud GPU.
+    # ~1.023B parameters with tied embeddings; designed for a memory-optimized 14 GiB+ cloud GPU.
     "bilingual-base-1b": ("MMD-Base-1B-Bilingual", 32000, 256, 2048, 19, 16, 1000),
 }
 
