@@ -117,6 +117,7 @@ ipcMain.handle("models:start",async(_event,rawId:unknown)=>{
   const model=await findInstalledModel(rawId);
   const existing=modelProcesses.get(model.id);
   if(existing)return {running:true,device:existing.device};
+  if(modelProcesses.size>0)throw new Error("Only one MMD model runtime can be active at a time. Stop the current model before starting another.");
   const python=await dialog.showOpenDialog({title:"Select Python with PyTorch and tokenizers installed",properties:["openFile"],...(process.platform==="win32"?{filters:[{name:"Python executable",extensions:["exe"]}]}:{})});
   if(python.canceled||!python.filePaths[0])return null;
   const scriptRoot=app.isPackaged?path.join(process.resourcesPath,"cloud","runtime"):path.resolve(app.getAppPath(),"cloud","runtime");
