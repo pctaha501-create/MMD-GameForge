@@ -30,7 +30,7 @@ The repository contains an Electron + TypeScript desktop shell, project workspac
 
 The desktop inference path requires a user-selected Python environment with PyTorch and tokenizers. No trained model weights are included yet.
 
-**MMD Cloud Training — MCT-01 through MCT-09 foundations in progress.**
+**MMD Cloud Training — MCT-01 through MCT-11 foundations in progress, including document-level dataset rights review and a human-gated release acceptance checker.**
 
 - Versioned training/checkpoint contracts and provider policy.
 - From-scratch Transformer pretraining and response-only instruction training.
