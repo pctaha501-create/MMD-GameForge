@@ -197,7 +197,7 @@ ipcMain.handle("models:import-folder", async () => {
   const names = new Set<string>();
   let total = 0;
   for (const item of manifest.files) {
-    if (!item || typeof item.path !== "string" || path.basename(item.path) !== item.path || !(allowed.has(item.path) || /^[a-zA-Z0-9_-]+\\.json$/.test(item.path))) throw new Error("Bundle contains an unsupported file path.");
+    if (!item || typeof item.path !== "string" || path.basename(item.path) !== item.path || !(allowed.has(item.path) || /^[a-zA-Z0-9_-]+\.json$/.test(item.path))) throw new Error("Bundle contains an unsupported file path.");
     if (names.has(item.path)) throw new Error("Bundle contains duplicate file entries.");
     names.add(item.path);
     if (!/^[a-f0-9]{64}$/i.test(item.sha256) || !Number.isSafeInteger(item.size_bytes) || item.size_bytes < 0) throw new Error("Bundle contains invalid artifact metadata.");
