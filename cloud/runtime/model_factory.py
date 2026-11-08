@@ -41,6 +41,7 @@ PROFILES = {
     "multilingual-pilot": ("MMD-Multilingual-Base", 16000, 512, 384, 6, 6, 2000),
     "code-tiny": ("MMD-Code-Tiny", 12000, 256, 192, 3, 6, 800),
     "game-design-tiny": ("MMD-GameDesign-Tiny", 12000, 256, 192, 3, 6, 800),
+    "game-agent-tiny": ("MMD-Game-Agent-Tiny", 12000, 512, 192, 4, 6, 1000),
 }
 
 def estimate_parameters(config: dict) -> dict:

@@ -7,7 +7,7 @@ from experiment_registry import connect, register
 
 class ModelFactoryTests(unittest.TestCase):
     def test_profiles_are_random_init_and_no_paid_fallback(self):
-        for profile in ("multilingual-tiny","multilingual-pilot","code-tiny","game-design-tiny"):
+        for profile in ("multilingual-tiny","multilingual-pilot","code-tiny","game-design-tiny","game-agent-tiny"):
             config=create_config(profile,123)
             self.assertEqual(config["initialization"]["weights"],"random")
             self.assertFalse(config["resource_policy"]["paid_fallback"])

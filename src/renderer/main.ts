@@ -134,12 +134,13 @@ function projectView(): string {
   <div class="footnote"><span>i</span> FILES ARE ONLY LISTED HERE. GAMEFORGE DOES NOT MODIFY OR DELETE YOUR EXISTING PROJECT CONTENTS.</div>`;
 }
 
-type ModelProfile = "multilingual-tiny" | "multilingual-pilot" | "code-tiny" | "game-design-tiny";
+type ModelProfile = "multilingual-tiny" | "multilingual-pilot" | "code-tiny" | "game-design-tiny" | "game-agent-tiny";
 const modelProfiles: Record<ModelProfile, {name:string;description:string;vocab:number;seq:number;hidden:number;layers:number;heads:number;steps:number;languages:string[]}> = {
   "multilingual-tiny": {name:"MMD Multilingual Tiny",description:"Smallest multilingual experiment for verifying the end-to-end pipeline.",vocab:8000,seq:256,hidden:128,layers:2,heads:4,steps:500,languages:["fa","en","de","fr","es","ar","zh","hi"]},
   "multilingual-pilot": {name:"MMD Multilingual Base",description:"The initial multilingual pilot configuration. Requires cloud VRAM measurement.",vocab:16000,seq:512,hidden:384,layers:6,heads:6,steps:2000,languages:["fa","en","de","fr","es","ar","zh","hi"]},
   "code-tiny": {name:"MMD Code Tiny",description:"A from-scratch code-language experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["code"]},
   "game-design-tiny": {name:"MMD Game Design Tiny",description:"A from-scratch game-design text experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["en","fa"]},
+  "game-agent-tiny": {name:"MMD Game Agent Tiny",description:"A from-scratch instruction model for structured GameForge tool calls; requires a dedicated licensed tool-use dataset.",vocab:12000,seq:512,hidden:192,layers:4,heads:6,steps:1000,languages:["en","fa"]},
 };
 function modelEstimate(profile: ModelProfile): {parameters:number;weightMiB:number;adamMiB:number} {
   const p=modelProfiles[profile],d=p.hidden,ff=d*4;
