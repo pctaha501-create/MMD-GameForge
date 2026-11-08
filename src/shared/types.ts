@@ -55,5 +55,5 @@ export interface UnrealStatus { installed: boolean; editorPath: string | null; p
 export interface StudioSettings { editorFontSize?: number; wordWrap?: boolean; confirmExternal?: boolean; unrealEditorPath?: string; }
 
 export interface AiDatasetInfo { id: string; name: string; bytes: number; characters: number; createdAt: string; }
-export interface AiModelInfo { id: string; name: string; datasetName: string; createdAt: string; trainedCharacters: number; vocabularySize: number; contextLength: number; kind: string; }
+export interface AiModelInfo { id: string; name: string; datasetName: string; createdAt: string; trainedCharacters: number; vocabularySize: number; hiddenSize: number; architecture: string; initialization: string; seed: number; epochs: number; learningRate: number; trainingLoss: number; kind: string; }
 export interface AiStatus { runtime: string; mode: "offline"; datasets: number; models: number; storagePath: string; modelKind: string; limitations: string[]; }

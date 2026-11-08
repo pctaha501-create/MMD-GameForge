@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const { AiCore, weightedPick, safeName, CONTEXT } = require("../electron/ai-core.cjs");
+const { AiCore, seededRandom, safeName, HIDDEN_SIZE } = require("../electron/ai-core.cjs");
 
 test("AI research baseline imports, trains, persists, and generates locally", async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mmd-ai-"));
@@ -16,10 +16,16 @@ test("AI research baseline imports, trains, persists, and generates locally", as
   assert.ok(dataset.characters > 40);
   assert.equal((await core.listDatasets()).length, 1);
   const model = await core.train(dataset.id, "Test model");
-  assert.equal(model.kind, "character-trigram");
-  assert.equal(model.contextLength, CONTEXT);
+  assert.equal(model.kind, "mmd-char-mlp-v1");
+  assert.equal(model.hiddenSize, 24);
+  assert.equal(model.initialization, "Xavier uniform random initialization");
+  assert.ok(Number.isInteger(model.seed));
+  assert.ok(Number.isFinite(model.trainingLoss));
   assert.ok(model.vocabularySize > 5);
   assert.equal((await core.listModels()).length, 1);
+  const saved = JSON.parse(await fs.readFile(path.join(core.modelsPath, model.id + ".json"), "utf8"));
+  assert.ok(saved.inputWeights.some(value => value !== 0));
+  assert.ok(saved.outputWeights.some(value => value !== 0));
   const generated = await core.generate(model.id, "the quick ", 80);
   assert.ok(generated.startsWith("the quick "));
   assert.equal([...generated].length, [..."the quick "].length + 80);
@@ -40,6 +46,18 @@ test("AI runtime rejects invalid IDs and undersized corpora", async (t) => {
 
 test("helper functions sanitize names and use weighted frequencies", () => {
   assert.equal(safeName("  My / Model  "), "My Model");
-  assert.equal(weightedPick({ only: 3 }, () => 0.5), "only");
-  assert.equal(weightedPick({}), undefined);
+  const randomA = seededRandom(1234); const randomB = seededRandom(1234);
+  assert.equal(randomA(), randomB());
+  assert.equal(HIDDEN_SIZE, 24);
+});
+
+
+test("neural trainer enforces its vocabulary resource guardrail", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mmd-ai-vocab-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const corpus = path.join(dir, "wide.txt");
+  await fs.writeFile(corpus, Array.from({ length: 140 }, (_, i) => String.fromCodePoint(0x400 + i)).join("") + " repeated text corpus", "utf8");
+  const core = new AiCore(path.join(dir, "runtime")); await core.initialize();
+  const dataset = await core.importDataset(corpus);
+  await assert.rejects(core.train(dataset.id, "Too wide"), /supports at most 128/);
 });
