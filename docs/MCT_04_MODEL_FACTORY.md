@@ -9,7 +9,7 @@ python cloud/runtime/model_factory.py create --profile multilingual-tiny --outpu
 python cloud/runtime/model_factory.py estimate --config cloud/configs/mmd-multilingual-tiny.json
 ```
 
-Profiles: multilingual-tiny, multilingual-pilot, code-tiny, game-design-tiny. Every generated profile starts from random weights and disables paid fallback. Domain profiles are architecture/configuration starting points, not trained specialist models.
+Profiles: multilingual-tiny, multilingual-pilot, code-tiny, game-design-tiny, game-agent-tiny. The Game Agent profile is intended for structured MMD tool-use instruction data and is not a trained agent by itself. Every generated profile starts from random weights and disables paid fallback. Domain profiles are architecture/configuration starting points, not trained specialist models.
 
 Memory output is a lower bound: activations, CUDA workspace, allocator fragmentation, and framework overhead are additional. It must not be treated as a VRAM fit guarantee.
 
