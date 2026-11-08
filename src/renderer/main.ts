@@ -165,7 +165,7 @@ function makeModelConfig(profile: ModelProfile, seed:number): object {
   };
 }
 function downloadModelConfig(profile:ModelProfile,seed:number):void {
-  const blob=new Blob([JSON.stringify(makeModelConfig(profile,seed),null,2)+"\\n"],{type:"application/json"});
+  const blob=new Blob([JSON.stringify(makeModelConfig(profile,seed),null,2)+"\n"],{type:"application/json"});
   const url=URL.createObjectURL(blob);const anchor=document.createElement("a");
   anchor.href=url;anchor.download=profile+".json";anchor.click();URL.revokeObjectURL(url);
 }
