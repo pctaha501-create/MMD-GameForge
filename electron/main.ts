@@ -234,6 +234,8 @@ ipcMain.handle("models:import-folder", async () => {
       testLoss: typeof manifest.evaluation?.test_loss === "number" ? manifest.evaluation.test_loss : null,
       parameterStatus: "verified_bundle_imported",
       folder: destination,
+      running: false,
+      runtimeDevice: null,
     };
     await writeFile(path.join(destination, "installed.json"), JSON.stringify(installed, null, 2), "utf8");
     return installed;
