@@ -65,6 +65,12 @@ class DatasetStudioTests(unittest.TestCase):
             self.assertIn("fa", report["language_counts"])
             self.assertTrue((out / "report.json").exists())
 
+    def test_language_stratification_keeps_both_languages_in_all_splits(self):
+        docs = self.make_docs(60)
+        splits = split_documents(docs, 2026)
+        for split in splits.values():
+            self.assertEqual({item["language"] for item in split}, {"fa", "en"})
+
     def test_too_few_unique_documents_fail(self):
         with self.assertRaisesRegex(ValueError, "three unique"):
             split_documents(self.make_docs(2), 1)

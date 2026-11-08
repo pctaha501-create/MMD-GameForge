@@ -34,11 +34,30 @@ def load_documents(path: Path) -> tuple[list[dict], dict]:
 
 def split_documents(documents:list[dict],seed:int)->dict[str,list[dict]]:
     if len(documents)<3: raise ValueError("At least three unique non-empty documents are required to create train/validation/test splits.")
-    ordered=sorted(documents,key=lambda item:stable_key(seed,item["text"],item["language"]))
-    n=len(ordered); test_count=max(1,round(n*.05)); validation_count=max(1,round(n*.05))
-    if test_count+validation_count>=n: test_count=validation_count=1
-    train_end=n-validation_count-test_count
-    return {"train":ordered[:train_end],"validation":ordered[train_end:n-test_count],"test":ordered[n-test_count:]}
+    # Split each language independently so bilingual datasets do not accidentally
+    # place one language only in the training partition.
+    groups:dict[str,list[dict]]={}
+    for item in documents: groups.setdefault(item["language"],[]).append(item)
+    result={"train":[],"validation":[],"test":[]}
+    for language,items in sorted(groups.items()):
+        ordered=sorted(items,key=lambda item:stable_key(seed,item["text"],language))
+        n=len(ordered)
+        if n>=3:
+            test_count=max(1,round(n*.05)); validation_count=max(1,round(n*.05))
+            if test_count+validation_count>=n: test_count=validation_count=1
+            train_end=n-validation_count-test_count
+            result["train"].extend(ordered[:train_end])
+            result["validation"].extend(ordered[train_end:n-test_count])
+            result["test"].extend(ordered[n-test_count:])
+        elif n==2:
+            result["train"].append(ordered[0]); result["validation"].append(ordered[1])
+        else:
+            result["train"].extend(ordered)
+    for name in result:
+        result[name].sort(key=lambda item:stable_key(seed,item["text"],item["language"]))
+    if not result["train"] or not result["validation"] or not result["test"]:
+        raise ValueError("The corpus needs enough unique documents to populate train, validation, and test splits.")
+    return result
 
 def prepare(args:argparse.Namespace)->dict:
     docs,stats=load_documents(Path(args.input))

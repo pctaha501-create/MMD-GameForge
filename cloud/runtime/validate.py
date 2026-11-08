@@ -74,4 +74,23 @@ def validate_job(config_path: str | Path, dataset_path: str | Path, provenance_p
         raise ValueError("Dataset provenance contains languages outside the model's configured language set.")
     if config.get("stage") == "base-test" and supplied != {"fa", "en"}:
         raise ValueError("MMD Base 1B test data must include both Persian (fa) and English (en).")
+    studio = provenance.get("dataset_studio", {})
+    if studio:
+        expected_hash = studio.get("corpus_sha256")
+        if expected_hash and hashlib.sha256(raw.encode("utf-8")).hexdigest() != expected_hash:
+            raise ValueError("Dataset corpus SHA-256 does not match Dataset Studio provenance.")
+        details = studio.get("split_details", {})
+        previous_end = 0
+        for split_name in ("train", "validation", "test"):
+            split = details.get(split_name)
+            if not isinstance(split, dict):
+                raise ValueError(f"Dataset Studio provenance is missing the {split_name} split details.")
+            start, end = split.get("corpus_start"), split.get("corpus_end")
+            if not isinstance(start, int) or not isinstance(end, int) or start < previous_end or end <= start or end > len(raw):
+                raise ValueError(f"Dataset Studio {split_name} split offsets are invalid or overlapping.")
+            previous_end = end
+            if config.get("stage") == "base-test":
+                counts = split.get("language_counts", {})
+                if any(int(counts.get(language, 0)) < 1 for language in ("fa", "en")):
+                    raise ValueError(f"MMD Base 1B requires both fa and en documents in the {split_name} split.")
     return {"config": config, "dataset_characters": len(raw), "dataset_revision": provenance["revision"]}
