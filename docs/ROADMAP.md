@@ -22,18 +22,18 @@ See [MCT_05_EVALUATION_AND_BUNDLES.md](./MCT_05_EVALUATION_AND_BUNDLES.md).
 
 See [MCT_06_LOCAL_INFERENCE.md](./MCT_06_LOCAL_INFERENCE.md).
 
-## MCT-07 — Instruction training and safe tool-use data
+## MCT-07 — Instruction training
 
-See [MCT_07_INSTRUCTION_TRAINING.md](./MCT_07_INSTRUCTION_TRAINING.md). Adds a prompt/response dataset pipeline, deterministic splits, and supervised response-only training from random initialization. Generated tool calls are not executed without a separate allowlisted approval layer.
+See [MCT_07_INSTRUCTION_TRAINING.md](./MCT_07_INSTRUCTION_TRAINING.md). Adds prompt/response dataset preparation and response-only supervised training from random initialization, with Kaggle and Colab notebook entrypoints.
 
-## MCT-08 — Task-specific AI orchestration
+## MCT-08 — Approval-gated tool router
 
-Build the schema-validated tool router, project-aware context retrieval, code/design task workflows, approval gates and task-specific benchmark suites.
+See [MCT_08_SAFE_TOOL_ROUTER.md](./MCT_08_SAFE_TOOL_ROUTER.md). Adds strict JSON tool-call validation and approved project file, scene and Unreal actions. No arbitrary shell execution.
 
-## MCT-09 — Multimodal model research
+## MCT-09 — Task-specific evaluation and multimodal research
 
-Evaluate from-scratch vision, audio and 3D model architectures separately. Do not promise free-tier training of large diffusion/video models; require small measured experiments and real dataset licensing first.
+Add Unreal/C++ and game-design benchmarks, code compilation checks, project-level integration tests, then separate from-scratch vision, audio and 3D research tracks. Large image/video models are not assumed feasible on free GPU tiers.
 
 ## AI Core release gate
 
-The assistant is not complete until task-specific instruction-trained models exist, benchmark targets are met, local inference is stable, safe tool workflows can create and validate Unreal project artifacts, and end-to-end Windows acceptance tests pass.
+The assistant is not complete until task-specific instruction-trained models exist, benchmark targets are met, local inference is stable, safe tool workflows create and validate Unreal project artifacts, and end-to-end Windows acceptance tests pass.
