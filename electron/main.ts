@@ -501,8 +501,19 @@ ipcMain.handle("unreal:build-project",async(_event,rawProjectPath:unknown)=>{
   let executable:string,args:string[];
   try{await access(ubtExe);executable=ubtExe;args=[projectName+"Editor","Win64","Development",`-Project=${projectFile}`,"-WaitMutex","-NoHotReloadFromIDE"];}
   catch{
-    try{await access(ubtDll);executable="dotnet";args=[ubtDll,projectName+"Editor","Win64","Development",`-Project=${projectFile}`,"-WaitMutex","-NoHotReloadFromIDE"];}
-    catch{throw new Error("UnrealBuildTool was not found beside the detected Unreal Engine installation.");}
+    try{
+      await access(ubtDll);
+      const dotnetRoot=path.join(engineRoot,"Binaries","ThirdParty","DotNet");
+      async function locateDotnet(folder:string,depth:number):Promise<string|null>{
+        if(depth>5)return null;
+        let items;try{items=await readdir(folder,{withFileTypes:true});}catch{return null;}
+        for(const item of items)if(item.isFile()&&item.name.toLowerCase()==="dotnet.exe")return path.join(folder,item.name);
+        for(const item of items)if(item.isDirectory()&&!item.isSymbolicLink()){const found=await locateDotnet(path.join(folder,item.name),depth+1);if(found)return found;}
+        return null;
+      }
+      executable=await locateDotnet(dotnetRoot,0)??"dotnet";
+      args=[ubtDll,projectName+"Editor","Win64","Development",`-Project=${projectFile}`,"-WaitMutex","-NoHotReloadFromIDE"];
+    }catch{throw new Error("UnrealBuildTool was not found beside the detected Unreal Engine installation.");}
   }
   const started=Date.now();
   return await new Promise((resolve,reject)=>{
