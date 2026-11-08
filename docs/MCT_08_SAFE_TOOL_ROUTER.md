@@ -21,7 +21,8 @@ MCT-08 connects structured model proposals to a small allowlisted set of desktop
 - `scene.save`: save a validated GameForge scene JSON document.
 - `unreal.detect`: inspect whether Unreal Editor and a .uproject are available.
 - `unreal.validate_project`: read-only validation of the root .uproject JSON, module declarations, Source files and module Build.cs files. It does not compile or launch Unreal.
-- `unreal.create_project`: create a starter C++ Unreal project inside the active GameForge workspace, including a .uproject, Game/Editor targets, module Build.cs and module entry point. Requires confirmation. This is a scaffold, not a finished game.
+- `unreal.create_project`: create a starter C++ Unreal project inside the active GameForge workspace, including a .uproject, Game/Editor targets, module Build.cs, module entry point and starter GameMode. Requires confirmation. This is a scaffold, not a finished game.
+- `unreal.build_project`: invoke the detected UnrealBuildTool for the active Windows project, with fixed Win64 Development arguments, no shell, a 30-minute timeout and explicit confirmation. Build output is returned for review.
 - `unreal.launch`: launch the active .uproject in a detected Unreal Editor after confirmation.
 
 ## Safety rules
