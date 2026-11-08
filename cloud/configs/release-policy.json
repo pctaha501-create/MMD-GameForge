@@ -1,0 +1,25 @@
+{
+  "schema_version": "mct.release-policy.v1",
+  "max_test_loss": 5,
+  "max_perplexity": 150,
+  "min_benchmark_examples": 50,
+  "min_overall_pass_rate": 0.85,
+  "min_group_examples": 5,
+  "min_group_pass_rate": 0.75,
+  "required_by_task": [
+    "unreal_cpp",
+    "game_design",
+    "project_tools"
+  ],
+  "required_by_language": [
+    "fa",
+    "en",
+    "de",
+    "fr",
+    "es",
+    "ar",
+    "zh",
+    "hi"
+  ],
+  "note": "Initial conservative research policy; thresholds require project-owner review and do not certify production readiness."
+}
