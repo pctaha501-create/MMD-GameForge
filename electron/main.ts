@@ -1,10 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { mkdir, readdir, stat, readFile, writeFile, copyFile, realpath, access } from "node:fs/promises";
+import { mkdir, readdir, stat, lstat, readFile, writeFile, copyFile, realpath, access, rm, rename } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { createServer } from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import projectNameRules = require("../src/shared/project-name.cjs");
-import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings } from "../src/shared/types.js";
+import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings, ImportedModel } from "../src/shared/types.js";
 
 const { validateProjectName } = projectNameRules;
 const isDevelopment = !app.isPackaged;
@@ -64,6 +67,184 @@ function createWindow(): void {
     if (!allowed) event.preventDefault();
   });
 }
+
+
+async function hashFile(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+async function modelStorageRoot(): Promise<string> {
+  const root = path.join(app.getPath("userData"), "models");
+  await mkdir(root, { recursive: true });
+  return root;
+}
+async function readInstalledModels(): Promise<ImportedModel[]> {
+  const root = await modelStorageRoot();
+  const entries = await readdir(root, { withFileTypes: true });
+  const models: ImportedModel[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    const folder = path.join(root, entry.name);
+    try {
+      const installed = JSON.parse(await readFile(path.join(folder, "installed.json"), "utf8")) as ImportedModel;
+      const manifest = JSON.parse(await readFile(path.join(folder, "bundle-manifest.json"), "utf8")) as Record<string, unknown>;
+      if (manifest.schema_version !== "mct.model-bundle.v1" || installed.id !== entry.name) continue;
+      models.push({...installed,running:modelProcesses.has(installed.id),runtimeDevice:modelProcesses.get(installed.id)?.device??null});
+    } catch { /* Ignore incomplete or invalid folders. */ }
+  }
+  return models.sort((a,b)=>b.installedAt.localeCompare(a.installedAt));
+}
+ipcMain.handle("models:list", async () => readInstalledModels());
+
+const modelProcesses = new Map<string, { child: ReturnType<typeof spawn>; port: number; token: string; device: string }>();
+async function freeLoopbackPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve,reject)=>server.once("error",reject).listen(0,"127.0.0.1",()=>resolve()));
+  const address=server.address();
+  if(!address||typeof address==="string"){server.close();throw new Error("Could not allocate a local runtime port.");}
+  const port=address.port;
+  await new Promise<void>(resolve=>server.close(()=>resolve()));
+  return port;
+}
+async function findInstalledModel(id: string): Promise<ImportedModel> {
+  const model=(await readInstalledModels()).find(item=>item.id===id);
+  if(!model)throw new Error("The selected model is not installed.");
+  return model;
+}
+ipcMain.handle("models:start",async(_event,rawId:unknown)=>{
+  if(typeof rawId!=="string"||!rawId)throw new Error("Select an installed model first.");
+  const model=await findInstalledModel(rawId);
+  const existing=modelProcesses.get(model.id);
+  if(existing)return {running:true,device:existing.device};
+  if(modelProcesses.size>0)throw new Error("Only one MMD model runtime can be active at a time. Stop the current model before starting another.");
+  const python=await dialog.showOpenDialog({title:"Select Python with PyTorch and tokenizers installed",properties:["openFile"],...(process.platform==="win32"?{filters:[{name:"Python executable",extensions:["exe"]}]}:{})});
+  if(python.canceled||!python.filePaths[0])return null;
+  const scriptRoot=app.isPackaged?path.join(process.resourcesPath,"cloud","runtime"):path.resolve(app.getAppPath(),"cloud","runtime");
+  const script=path.join(scriptRoot,"serve.py");
+  await access(script);
+  const port=await freeLoopbackPort();
+  const token=randomBytes(32).toString("base64url");
+  const child=spawn(python.filePaths[0],[script,"--model-dir",model.folder,"--host","127.0.0.1","--port",String(port)],{
+    cwd:scriptRoot,windowsHide:true,stdio:["ignore","pipe","pipe"],
+    env:{PATH:process.env.PATH,SYSTEMROOT:process.env.SYSTEMROOT,WINDIR:process.env.WINDIR,TEMP:process.env.TEMP,TMP:process.env.TMP,USERPROFILE:process.env.USERPROFILE,HOME:process.env.HOME,CUDA_VISIBLE_DEVICES:process.env.CUDA_VISIBLE_DEVICES,MMD_RUNTIME_TOKEN:token,PYTHONUNBUFFERED:"1"}
+  });
+  let stdout="",stderr="",settled=false;
+  const result=await new Promise<{running:true;device:string}>((resolve,reject)=>{
+    const timeout=setTimeout(()=>finish(new Error("Model runtime did not become ready within 180 seconds. Check that this Python environment has PyTorch and tokenizers.")),180000);
+    const finish=(error?:Error,value?:{running:true;device:string})=>{
+      if(settled)return;settled=true;clearTimeout(timeout);
+      if(error){child.kill();reject(error);}else if(value)resolve(value);
+    };
+    child.once("error",error=>finish(new Error("Could not start Python: "+error.message)));
+    child.once("exit",(code)=>{const active=modelProcesses.get(model.id);if(active?.child===child)modelProcesses.delete(model.id);if(!settled)finish(new Error("Python runtime exited before becoming ready (code "+code+"). "+stderr.slice(-1200)));});
+    child.stdout?.on("data",(chunk:Buffer)=>{
+      stdout+=chunk.toString();
+      for(const line of stdout.split("\n")){
+        try{const message=JSON.parse(line);if(message.event==="MMD_RUNTIME_READY"){
+          modelProcesses.set(model.id,{child,port,token,device:String(message.device??"unknown")});
+          finish(undefined,{running:true,device:String(message.device??"unknown")});
+        }}catch{/* Wait for a complete JSON line. */}
+      }
+      stdout=stdout.slice(-8192);
+    });
+    child.stderr?.on("data",(chunk:Buffer)=>{stderr=(stderr+chunk.toString()).slice(-8192);});
+  });
+  return result;
+});
+ipcMain.handle("models:stop",async(_event,rawId:unknown)=>{
+  if(typeof rawId!=="string")return false;
+  const runtime=modelProcesses.get(rawId);if(!runtime)return false;
+  modelProcesses.delete(rawId);runtime.child.kill();return true;
+});
+ipcMain.handle("models:generate",async(_event,rawId:unknown,rawPrompt:unknown,options:unknown)=>{
+  if(typeof rawId!=="string"||typeof rawPrompt!=="string")throw new Error("Invalid generation request.");
+  const runtime=modelProcesses.get(rawId);if(!runtime)throw new Error("Start the selected local model first.");
+  const opts=options&&typeof options==="object"?options as Record<string,unknown>:{};
+  const response=await fetch(`http://127.0.0.1:${runtime.port}/generate`,{
+    method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+runtime.token},
+    body:JSON.stringify({prompt:rawPrompt,max_new_tokens:opts.maxNewTokens??128,temperature:opts.temperature??0.8,top_k:opts.topK??40}),
+    signal:AbortSignal.timeout(180000)
+  });
+  const body=await response.json() as {output?:string;error?:string;model_family?:string};
+  if(!response.ok)throw new Error(body.error??"Local generation failed.");
+  return {output:body.output??"",modelFamily:body.model_family??"MMD model",device:runtime.device};
+});
+
+ipcMain.handle("models:import-folder", async () => {
+  const selected = await dialog.showOpenDialog({
+    title: "Select an extracted MMD model bundle folder",
+    properties: ["openDirectory"],
+  });
+  if (selected.canceled || !selected.filePaths[0]) return null;
+  const source = await realpath(selected.filePaths[0]);
+  const entries = await readdir(source, { withFileTypes: true });
+  if (entries.some(x => x.isSymbolicLink())) throw new Error("Model bundles cannot contain symbolic links.");
+  const manifestFile = path.join(source, "bundle-manifest.json");
+  const manifestInfo = await stat(manifestFile);
+  if (manifestInfo.size > 1024 * 1024) throw new Error("Bundle manifest exceeds the 1 MB safety limit.");
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8")) as {
+    schema_version?: string; model_family?: string;
+    initialization?: { weights_origin?: string };
+    lineage?: { config_sha256?: string; dataset_revision?: string };
+    evaluation?: { test_loss?: number; perplexity?: number };
+    files?: { path: string; sha256: string; size_bytes: number }[];
+  };
+  if (manifest.schema_version !== "mct.model-bundle.v1") throw new Error("Unsupported MMD model bundle version.");
+  if (manifest.initialization?.weights_origin !== "random_initialization") throw new Error("This bundle is not verified as a from-scratch MMD model.");
+  if (!manifest.model_family || !Array.isArray(manifest.files) || manifest.files.length < 4) throw new Error("Bundle manifest is incomplete.");
+  const allowed = new Set(["checkpoint.pt", "tokenizer.json", "checkpoint-manifest.json", "mmd-multilingual-pilot.json", "mmd-base-1b-bilingual.json", "evaluation.json", "config.json"]);
+  const names = new Set<string>();
+  let total = 0;
+  for (const item of manifest.files) {
+    if (!item || typeof item.path !== "string" || path.basename(item.path) !== item.path || !(allowed.has(item.path) || /^[a-zA-Z0-9_-]+\.json$/.test(item.path))) throw new Error("Bundle contains an unsupported file path.");
+    if (names.has(item.path)) throw new Error("Bundle contains duplicate file entries.");
+    names.add(item.path);
+    if (!/^[a-f0-9]{64}$/i.test(item.sha256) || !Number.isSafeInteger(item.size_bytes) || item.size_bytes < 0) throw new Error("Bundle contains invalid artifact metadata.");
+    total += item.size_bytes;
+    if (total > 10 * 1024 * 1024 * 1024) throw new Error("Model bundle exceeds the 10 GB import safety limit.");
+    const file = path.join(source, item.path);
+    const info = await lstat(file);
+    if (!info.isFile() || info.isSymbolicLink() || info.size !== item.size_bytes) throw new Error("Model artifact size/type mismatch: " + item.path);
+    if (await hashFile(file) !== item.sha256) throw new Error("Model artifact SHA-256 mismatch: " + item.path);
+  }
+  for (const required of ["checkpoint.pt", "tokenizer.json", "checkpoint-manifest.json"]) if (!names.has(required)) throw new Error("Required model artifact missing: " + required);
+  const checkpointManifest = JSON.parse(await readFile(path.join(source, "checkpoint-manifest.json"), "utf8")) as {
+    initialization?: { weights_origin?: string }; lineage?: { config_sha256?: string; dataset_revision?: string };
+  };
+  if (checkpointManifest.initialization?.weights_origin !== "random_initialization") throw new Error("Checkpoint lineage does not confirm random initialization.");
+  if (checkpointManifest.lineage?.config_sha256 !== manifest.lineage?.config_sha256 || checkpointManifest.lineage?.dataset_revision !== manifest.lineage?.dataset_revision) throw new Error("Bundle and checkpoint lineage do not match.");
+  const configArtifact = manifest.files.find(item => item.sha256 === manifest.lineage?.config_sha256);
+  if (!configArtifact || configArtifact.sha256 !== manifest.lineage?.config_sha256) throw new Error("Bundle config hash does not match checkpoint lineage.");
+  const checkpointArtifacts = new Map((checkpointManifest as { artifacts?: { path:string; sha256:string }[] }).artifacts?.map(item => [item.path,item.sha256]) ?? []);
+  for (const name of ["checkpoint.pt","tokenizer.json"]) {
+    const entry = manifest.files.find(item => item.path === name);
+    if (!entry || checkpointArtifacts.get(name) !== entry.sha256) throw new Error("Checkpoint artifact manifest mismatch: " + name);
+  }
+  const safeFamily = manifest.model_family.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48) || "MMD-Model";
+  const id = safeFamily + "-" + Date.now().toString(36);
+  const root = await modelStorageRoot();
+  const destination = path.join(root, id);
+  await mkdir(destination, { recursive: false });
+  try {
+    for (const item of manifest.files) await copyFile(path.join(source, item.path), path.join(destination, item.path));
+    await copyFile(manifestFile, path.join(destination, "bundle-manifest.json"));
+    const installed: ImportedModel = {
+      id, modelFamily: manifest.model_family, installedAt: new Date().toISOString(),
+      datasetRevision: manifest.lineage?.dataset_revision ?? "unknown",
+      testLoss: typeof manifest.evaluation?.test_loss === "number" ? manifest.evaluation.test_loss : null,
+      parameterStatus: "verified_bundle_imported",
+      folder: destination,
+      running: false,
+      runtimeDevice: null,
+    };
+    await writeFile(path.join(destination, "installed.json"), JSON.stringify(installed, null, 2), "utf8");
+    return installed;
+  } catch (error) {
+    await rm(destination, { recursive: true, force: true });
+    throw error;
+  }
+});
 
 ipcMain.handle("app:get-info", () => ({
   name: app.getName(),
@@ -159,6 +340,19 @@ ipcMain.handle("project:read-file", async (_event, projectPath: unknown, relativ
   const info = await stat(target); if (info.size > 2 * 1024 * 1024) throw new Error("Files larger than 2 MB are not opened in the built-in editor.");
   return { content: await readFile(target, "utf8"), size: info.size };
 });
+
+ipcMain.handle("project:create-file",async(_event,projectPath:unknown,relativePath:unknown,content:unknown)=>{
+  if(typeof projectPath!=="string"||!path.isAbsolute(projectPath)||typeof relativePath!=="string"||!relativePath||path.isAbsolute(relativePath)||/^[a-zA-Z]:/.test(relativePath))throw new Error("Invalid project file path.");
+  if(relativePath.split(/[\\/]/).some(part=>!part||part==="."||part===".."))throw new Error("Project file path must stay inside the project.");
+  if(typeof content!=="string"||content.length>2*1024*1024)throw new Error("New file content exceeds the 2 MB limit.");
+  const root=await realpath(projectPath);const target=path.resolve(root,relativePath);if(!inside(root,target))throw new Error("Path is outside the selected project.");
+  const parent=await realpath(path.dirname(target));if(!inside(root,parent))throw new Error("Parent folder is outside the selected project.");
+  const extension=path.extname(target).slice(1).toLowerCase();if(!textExtensions.has(extension))throw new Error("This file type cannot be created in the built-in editor.");
+  try{await lstat(target);throw new Error("A file already exists at this path. Use the approved overwrite tool instead.");}
+  catch(error){if((error as NodeJS.ErrnoException).code!=="ENOENT")throw error;}
+  await writeFile(target,content,{encoding:"utf8",flag:"wx"});return {saved:true,created:true};
+});
+
 ipcMain.handle("project:write-file", async (_event, projectPath: unknown, relativePath: unknown, content: unknown) => {
   if (typeof content !== "string" || content.length > 2 * 1024 * 1024) throw new Error("Invalid content or file exceeds the 2 MB editor limit.");
   const { target } = await safeProjectFile(projectPath, relativePath); const extension = path.extname(target).slice(1).toLowerCase();
@@ -214,11 +408,130 @@ ipcMain.handle("project:reveal", async (_event, projectPath: unknown, relativePa
 });
 ipcMain.handle("settings:get", () => readStudioSettings());
 ipcMain.handle("settings:save", (_event, value: unknown) => writeStudioSettings(value));
+
+
+ipcMain.handle("unreal:create-project",async(_event,rawRoot:unknown,rawName:unknown)=>{
+  if(typeof rawRoot!=="string"||!path.isAbsolute(rawRoot)||typeof rawName!=="string"||!/^[A-Za-z][A-Za-z0-9_]{1,47}$/.test(rawName))throw new Error("Project name must start with a letter and contain 2–48 letters, numbers or underscores.");
+  const root=await realpath(rawRoot);const name=rawName;
+  const parent=path.join(root,"UnrealProjects");const destination=path.join(parent,name);
+  if(!inside(root,destination))throw new Error("Unreal project destination is outside the active workspace.");
+  try{await lstat(destination);throw new Error("An Unreal project with this name already exists.");}
+  catch(error){if((error as NodeJS.ErrnoException).code!=="ENOENT")throw error;}
+  await mkdir(parent,{recursive:true});
+  const temp=path.join(root,".mmd-unreal-"+Date.now().toString(36));
+  await mkdir(temp,{recursive:false});
+  const files:Record<string,string>={
+    [name+".uproject"]:JSON.stringify({FileVersion:3,EngineAssociation:"",Category:"Games",Description:"Created with MMD GameForge.",Modules:[{Name:name,Type:"Runtime",LoadingPhase:"Default"}]},null,2)+"\\n",
+    ["Source/"+name+".Target.cs"]:`using UnrealBuildTool;\nusing System.Collections.Generic;\npublic class ${name}Target : TargetRules\n{\n    public ${name}Target(TargetInfo Target) : base(Target)\n    {\n        Type = TargetType.Game;\n        DefaultBuildSettings = BuildSettingsVersion.V5;\n        ExtraModuleNames.Add("${name}");\n    }\n}\n`,
+    ["Source/"+name+"Editor.Target.cs"]:`using UnrealBuildTool;\nusing System.Collections.Generic;\npublic class ${name}EditorTarget : TargetRules\n{\n    public ${name}EditorTarget(TargetInfo Target) : base(Target)\n    {\n        Type = TargetType.Editor;\n        DefaultBuildSettings = BuildSettingsVersion.V5;\n        ExtraModuleNames.Add("${name}");\n    }\n}\n`,
+    ["Source/"+name+"/"+name+".Build.cs"]:`using UnrealBuildTool;\npublic class ${name} : ModuleRules\n{\n    public ${name}(ReadOnlyTargetRules Target) : base(Target)\n    {\n        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;\n        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore" });\n    }\n}\n`,
+    ["Source/"+name+"/Private/"+name+".cpp"]:`#include "Modules/ModuleManager.h"\nIMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ${name}, "${name}");\n`,
+    ["Source/"+name+"/Public/"+name+"GameMode.h"]:`#pragma once\n#include "CoreMinimal.h"\n#include "GameFramework/GameModeBase.h"\n#include "${name}GameMode.generated.h"\n\nUCLASS()\nclass ${name.toUpperCase()}_API A${name}GameMode : public AGameModeBase\n{\n    GENERATED_BODY()\n};\n`,
+    ["Source/"+name+"/Private/"+name+"GameMode.cpp"]:`#include "${name}GameMode.h"\n`,
+    ["Config/DefaultEngine.ini"]:`[/Script/EngineSettings.GeneralProjectSettings]\nProjectName=${name}\nProjectVersion=1.0.0\n\n`,
+    ["Content/README.md"]:`# Content\\n\\nPlace maps, materials, meshes, textures and other Unreal assets in this directory.\\n`,
+    ["README.md"]:`# ${name}\n\nUnreal Engine 5 C++ project scaffold created by MMD GameForge.\n\nOpen ${name}.uproject with Unreal Engine 5, generate project files if prompted, then build the ${name}Editor target. This scaffold is a starting point, not a finished game.\n`
+  };
+  try{
+    for(const [relative,content] of Object.entries(files)){const target=path.join(temp,relative);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,content,{encoding:"utf8",flag:"wx"});}
+    await rename(temp,destination);
+    return {created:true,name,projectPath:destination,projectFile:path.join(destination,name+".uproject"),files:Object.keys(files)};
+  }catch(error){await rm(temp,{recursive:true,force:true});throw error;}
+});
+
+ipcMain.handle("unreal:validate-project",async(_event,rawProjectPath:unknown)=>{
+  if(typeof rawProjectPath!=="string"||!path.isAbsolute(rawProjectPath))throw new Error("Invalid project folder.");
+  const root=await realpath(rawProjectPath);
+  const candidates=(await readdir(root,{withFileTypes:true})).filter(entry=>entry.isFile()&&entry.name.toLowerCase().endsWith(".uproject"));
+  if(candidates.length!==1)return {valid:false,projectFile:null,errors:[candidates.length?"Multiple .uproject files found at project root.":"No .uproject file found at project root."],warnings:[],modules:[],sourceFiles:0};
+  const candidate=candidates[0];
+  if(!candidate)return {valid:false,projectFile:null,errors:["No .uproject file found at project root."],warnings:[],modules:[],sourceFiles:0};
+  const projectFile=path.join(root,candidate.name);let projectJson:Record<string,unknown>;
+  try{projectJson=JSON.parse(await readFile(projectFile,"utf8")) as Record<string,unknown>;}
+  catch{return {valid:false,projectFile:candidate.name,errors:["The .uproject file is not valid JSON."],warnings:[],modules:[],sourceFiles:0};}
+  const errors:string[]=[],warnings:string[]=[];
+  if(!Array.isArray(projectJson.Modules)||projectJson.Modules.length===0)errors.push("The .uproject file has no Modules array.");
+  const modules=Array.isArray(projectJson.Modules)?projectJson.Modules.filter((x):x is Record<string,unknown>=>!!x&&typeof x==="object"&&!Array.isArray(x)): [];
+  for(const mod of modules){if(typeof mod.Name!=="string"||!mod.Name.trim())errors.push("A module entry has no valid Name.");}
+  const sourceRoot=path.join(root,"Source");
+  try{await access(sourceRoot);}catch{errors.push("The project has no Source directory.");}
+  const sourceFiles:string[]=[];const buildFiles:string[]=[];
+  async function scan(folder:string,depth:number):Promise<void>{
+    if(depth>8)return;
+    let entries;try{entries=await readdir(folder,{withFileTypes:true});}catch{return;}
+    for(const entry of entries){
+      if(entry.isSymbolicLink()||[".git","Binaries","Intermediate","Saved","DerivedDataCache","node_modules"].includes(entry.name))continue;
+      const full=path.join(folder,entry.name);
+      if(entry.isDirectory())await scan(full,depth+1);
+      else if(entry.isFile()){if(/\.(h|hpp|cpp|c|cs)$/i.test(entry.name))sourceFiles.push(full);if(/\.Build\.cs$/i.test(entry.name))buildFiles.push(full);}
+    }
+  }
+  await scan(sourceRoot,0);
+  if(modules.length&&buildFiles.length===0)errors.push("No module .Build.cs file was found under Source.");
+  if(sourceFiles.length===0)warnings.push("No C++ or C# source files were found under Source.");
+  for(const mod of modules){
+    const name=String(mod.Name??"");
+    if(name&&!buildFiles.some(file=>path.basename(file).toLowerCase()===name.toLowerCase()+".build.cs"))warnings.push("No matching "+name+".Build.cs module file was found.");
+  }
+  return {valid:errors.length===0,projectFile:candidate.name,errors,warnings,modules:modules.map(x=>String(x.Name??"")),sourceFiles:sourceFiles.length,buildFiles:buildFiles.length,buildPerformed:false};
+});
+
 ipcMain.handle("unreal:detect", async (_event, projectPath: unknown) => {
   if (typeof projectPath !== "string" || !path.isAbsolute(projectPath)) throw new Error("Invalid project path.");
   const root = await realpath(projectPath); const entries = await readdir(root, { withFileTypes: true }); const descriptor = entries.find(x => x.isFile() && x.name.toLowerCase().endsWith(".uproject")); const settings = await readStudioSettings();
   const editorPath = await findUnrealEditor(settings.unrealEditorPath); return { installed: !!editorPath, editorPath, projectFile: descriptor ? path.join(root, descriptor.name) : null } satisfies UnrealStatus;
 });
+
+ipcMain.handle("unreal:build-project",async(_event,rawProjectPath:unknown)=>{
+  if(process.platform!=="win32")throw new Error("Automated UnrealBuildTool invocation is currently supported on Windows only.");
+  if(typeof rawProjectPath!=="string"||!path.isAbsolute(rawProjectPath))throw new Error("Invalid project path.");
+  const root=await realpath(rawProjectPath);
+  const entries=await readdir(root,{withFileTypes:true});
+  const descriptor=entries.find(x=>x.isFile()&&x.name.toLowerCase().endsWith(".uproject"));
+  if(!descriptor)throw new Error("No .uproject file was found at the project root.");
+  const projectFile=path.join(root,descriptor.name);
+  const projectName=path.basename(descriptor.name,".uproject");
+  const settings=await readStudioSettings();
+  const editorPath=await findUnrealEditor(settings.unrealEditorPath);
+  if(!editorPath)throw new Error("Unreal Editor was not detected. Configure the editor path in Settings.");
+  const engineRoot=path.resolve(path.dirname(editorPath),"..","..");
+  const ubtRoot=path.join(engineRoot,"Binaries","DotNET","UnrealBuildTool");
+  const ubtExe=path.join(ubtRoot,"UnrealBuildTool.exe");
+  const ubtDll=path.join(ubtRoot,"UnrealBuildTool.dll");
+  let executable:string,args:string[];
+  try{await access(ubtExe);executable=ubtExe;args=[projectName+"Editor","Win64","Development",`-Project=${projectFile}`,"-WaitMutex","-NoHotReloadFromIDE"];}
+  catch{
+    try{
+      await access(ubtDll);
+      const dotnetRoot=path.join(engineRoot,"Binaries","ThirdParty","DotNet");
+      async function locateDotnet(folder:string,depth:number):Promise<string|null>{
+        if(depth>5)return null;
+        let items;try{items=await readdir(folder,{withFileTypes:true});}catch{return null;}
+        for(const item of items)if(item.isFile()&&item.name.toLowerCase()==="dotnet.exe")return path.join(folder,item.name);
+        for(const item of items)if(item.isDirectory()&&!item.isSymbolicLink()){const found=await locateDotnet(path.join(folder,item.name),depth+1);if(found)return found;}
+        return null;
+      }
+      executable=await locateDotnet(dotnetRoot,0)??"dotnet";
+      args=[ubtDll,projectName+"Editor","Win64","Development",`-Project=${projectFile}`,"-WaitMutex","-NoHotReloadFromIDE"];
+    }catch{throw new Error("UnrealBuildTool was not found beside the detected Unreal Engine installation.");}
+  }
+  const started=Date.now();
+  return await new Promise((resolve,reject)=>{
+    const child=spawn(executable,args,{cwd:root,windowsHide:true,shell:false,stdio:["ignore","pipe","pipe"]});
+    let stdout="",stderr="",settled=false;
+    const finish=(error?:Error,code?:number|null)=>{
+      if(settled)return;settled=true;clearTimeout(timer);
+      if(error){child.kill();reject(error);return;}
+      resolve({success:code===0,exitCode:code??null,projectFile,elapsedMs:Date.now()-started,stdout:stdout.slice(-120000),stderr:stderr.slice(-120000)});
+    };
+    const timer=setTimeout(()=>finish(new Error("UnrealBuildTool exceeded the 30-minute build limit.")),30*60*1000);
+    child.once("error",error=>finish(new Error("Could not start UnrealBuildTool: "+error.message)));
+    child.once("exit",code=>finish(undefined,code));
+    child.stdout?.on("data",(chunk:Buffer)=>{stdout=(stdout+chunk.toString()).slice(-120000);});
+    child.stderr?.on("data",(chunk:Buffer)=>{stderr=(stderr+chunk.toString()).slice(-120000);});
+  });
+});
+
 ipcMain.handle("unreal:launch", async (_event, projectFile: unknown, editorPath?: unknown) => {
   if (typeof projectFile !== "string" || !path.isAbsolute(projectFile) || path.extname(projectFile).toLowerCase() !== ".uproject") throw new Error("Invalid Unreal project descriptor.");
   await access(projectFile);
@@ -233,6 +546,8 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on("before-quit",()=>{for(const runtime of modelProcesses.values())runtime.child.kill();modelProcesses.clear();});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

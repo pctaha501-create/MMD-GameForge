@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mmd.gameforge/schemas/dataset-source-record.v1.json",
+  "title": "MMD dataset source metadata record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "document_id",
+    "source_url",
+    "source_revision",
+    "language",
+    "license_id",
+    "license_url",
+    "attribution",
+    "text_sha256",
+    "rights_basis",
+    "collection_method",
+    "public_redistribution",
+    "source_rights_verified"
+  ],
+  "properties": {
+    "document_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "source_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$"
+    },
+    "license_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "license_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "attribution": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "rights_basis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "collection_method": {
+      "type": "string",
+      "minLength": 1
+    },
+    "public_redistribution": {
+      "const": true
+    },
+    "source_rights_verified": {
+      "const": true
+    }
+  }
+}

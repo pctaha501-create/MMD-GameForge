@@ -1,8 +1,8 @@
 {
   "schema_version": "mct.model-config.v1",
-  "model_family": "MMD-Multilingual-Base",
+  "model_family": "MMD-Bilingual-Pilot",
   "stage": "pilot",
-  "description": "Small from-scratch decoder-only Transformer configuration for measuring cloud notebook feasibility. Not a production model-size claim.",
+  "description": "Small Persian/English from-scratch decoder-only Transformer for pipeline smoke tests only; not the 1B Base model.",
   "architecture": {
     "type": "decoder_only_transformer",
     "vocab_size": 16000,
@@ -21,13 +21,7 @@
     "normalization": "unicode_nfc",
     "languages": [
       "fa",
-      "en",
-      "de",
-      "fr",
-      "es",
-      "ar",
-      "zh",
-      "hi"
+      "en"
     ]
   },
   "initialization": {

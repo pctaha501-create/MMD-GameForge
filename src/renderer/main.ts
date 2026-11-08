@@ -1,6 +1,7 @@
 import "./styles.css";
 import type { ProjectSummary } from "../shared/types.js";
 import { renderProfessional, bindProfessional } from "./professional.js";
+import { validateAIToolCall } from "../shared/ai-tool-call.mjs";
 
 type View = "dashboard" | "projects" | "world" | "code" | "assets" | "ai" | "training" | "settings";
 const icons: Record<string, string> = {
@@ -30,6 +31,7 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 let currentView: View = "dashboard";
 let activeProject: ProjectSummary | null = null;
 let appVersion = "0.2.0";
+let aiConversation: { role: "user" | "assistant"; content: string }[] = [];
 let toastTimer = 0;
 const recentKey = "mmd-gameforge.recent-projects";
 
@@ -132,7 +134,198 @@ function projectView(): string {
   <section class="panel file-panel">${entries.length ? entries.map((entry) => `<div class="file-row"><span class="file-icon ${entry.kind}">${icon(entry.kind === "folder" ? "folder" : "code",17)}</span><strong>${escapeHtml(entry.name)}</strong><small>${entry.kind.toUpperCase()}</small></div>`).join("") : `<div class="empty-state"><strong>This folder is empty</strong><p>GameForge can use this directory as your project workspace.</p></div>`}</section>
   <div class="footnote"><span>i</span> FILES ARE ONLY LISTED HERE. GAMEFORGE DOES NOT MODIFY OR DELETE YOUR EXISTING PROJECT CONTENTS.</div>`;
 }
+
+type ModelProfile = "bilingual-base-1b" | "multilingual-tiny" | "multilingual-pilot" | "code-tiny" | "game-design-tiny" | "game-agent-tiny";
+const modelProfiles: Record<ModelProfile, {name:string;description:string;vocab:number;seq:number;hidden:number;layers:number;heads:number;steps:number;languages:string[]}> = {
+  "bilingual-base-1b": {name:"MMD Base 1B (Persian + English)",description:"The main bilingual Base test target: ~1.023B parameters, random initialization, cloud CUDA GPU with at least 24 GiB preflight.",vocab:32000,seq:256,hidden:2048,layers:19,heads:16,steps:1000,languages:["fa","en"]},
+  "multilingual-tiny": {name:"MMD Bilingual Tiny",description:"Small Persian/English experiment for verifying the end-to-end pipeline.",vocab:8000,seq:256,hidden:128,layers:2,heads:4,steps:500,languages:["fa","en"]},
+  "multilingual-pilot": {name:"MMD Bilingual Pilot",description:"Small Persian/English pilot for measuring the end-to-end cloud training pipeline.",vocab:16000,seq:512,hidden:384,layers:6,heads:6,steps:2000,languages:["fa","en"]},
+  "code-tiny": {name:"MMD Code Tiny",description:"A from-scratch code-language experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["en","fa"]},
+  "game-design-tiny": {name:"MMD Game Design Tiny",description:"A from-scratch game-design text experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["en","fa"]},
+  "game-agent-tiny": {name:"MMD Game Agent Tiny",description:"A from-scratch instruction model for structured GameForge tool calls; requires a dedicated licensed tool-use dataset.",vocab:12000,seq:512,hidden:192,layers:4,heads:6,steps:1000,languages:["en","fa"]},
+};
+function modelEstimate(profile: ModelProfile): {parameters:number;weightMiB:number;adamMiB:number} {
+  const p=modelProfiles[profile],d=p.hidden,ff=d*4;
+  const embedding=p.vocab*d+p.seq*d;
+  const attention=4*d*d+4*d,feed=d*ff+ff+ff*d+d,norm=4*d;
+  const total=embedding+p.layers*(attention+feed+norm)+2*d;
+  return {parameters:total,weightMiB:total*4/1048576,adamMiB:total*(profile==="bilingual-base-1b"?10:16)/1048576};
+}
+function makeModelConfig(profile: ModelProfile, seed:number): object {
+  const p=modelProfiles[profile];
+  return {
+    schema_version:"mct.model-config.v1",model_family:p.name,stage:profile==="bilingual-base-1b"?"base-test":"experiment",
+    description:p.description+" Random initialization only; no pretrained weights.",
+    architecture:{type:"decoder_only_transformer",vocab_size:p.vocab,max_sequence_length:p.seq,hidden_size:p.hidden,num_layers:p.layers,num_attention_heads:p.heads,feed_forward_multiplier:4,dropout:0.1,tie_word_embeddings:true},
+    tokenizer:{type:"byte_level_bpe",training_from_scratch:true,target_vocab_size:p.vocab,normalization:"unicode_nfc",languages:p.languages},
+    initialization:{weights:"random",method:"architecture_defined",seed},
+    training:{objective:"causal_language_modeling_next_token_prediction",learning_rate:profile==="bilingual-base-1b"?0.0001:0.0003,optimizer:profile==="bilingual-base-1b"?"adamw_8bit":"adamw",gradient_checkpointing:profile==="bilingual-base-1b",weight_decay:0.1,warmup_steps:profile==="bilingual-base-1b"?100:Math.max(1,Math.round(p.steps*0.1)),max_steps:p.steps,micro_batch_size:1,gradient_accumulation_steps:profile==="bilingual-base-1b"?16:8,gradient_clipping:1,precision:"auto",checkpoint_interval_steps:profile==="bilingual-base-1b"?25:Math.max(10,Math.min(100,Math.round(p.steps/10))),evaluation_interval_steps:profile==="bilingual-base-1b"?50:Math.max(10,Math.min(100,Math.round(p.steps/10))),resume_from_checkpoint:true},
+    data:{require_license_record:true,require_provenance_record:true,deduplicate:true,split:["train","validation","test"],language_balance:"measure_before_sampling"},
+    resource_policy:{target:"free_compliant_cloud_notebooks",paid_fallback:false,user_started_sessions_only:true,save_checkpoint_before_runtime_limit:true,...(profile==="bilingual-base-1b"?{require_cuda:true,minimum_gpu_memory_gib:24,hardware_note:"8-bit AdamW state lower bound is about 9.53 GiB before activations and runtime overhead; gradient checkpointing reduces activation memory. 24 GiB is a conservative minimum preflight, not a fit guarantee."}:{})}
+  };
+}
+function downloadModelConfig(profile:ModelProfile,seed:number):void {
+  const blob=new Blob([JSON.stringify(makeModelConfig(profile,seed),null,2)+"\n"],{type:"application/json"});
+  const url=URL.createObjectURL(blob);const anchor=document.createElement("a");
+  anchor.href=url;anchor.download=profile+".json";anchor.click();URL.revokeObjectURL(url);
+}
+function aiCoreView():string {
+  const cards=(Object.keys(modelProfiles) as ModelProfile[]).map(profile=>{
+    const p=modelProfiles[profile],e=modelEstimate(profile);
+    return `<article class="ai-model-card"><div class="ai-model-top"><span class="ai-model-symbol">✳</span><span class="ai-status">CONFIG ONLY</span></div><h3>${p.name}</h3><p>${p.description}</p><div class="ai-model-stats"><span><b>${e.parameters.toLocaleString()}</b><small>PARAMETERS</small></span><span><b>${e.weightMiB.toFixed(1)} MiB</b><small>FP32 WEIGHTS</small></span></div><small class="ai-model-languages">${p.languages.join(" · ").toUpperCase()}</small></article>`;
+  }).join("");
+  return `<div class="ai-page"><div class="page-heading"><div><div class="eyebrow">FIRST-PARTY INTELLIGENCE</div><h1>MMD AI <span>Core</span></h1><p class="page-lead">A family of models designed to be initialized and trained from scratch by MMD GameForge.</p></div><button class="button button-primary" data-ai-action="workshop">Open Model Workshop ↗</button></div><section class="ai-warning"><b id="ai-model-state">Research status — no trained model is installed yet.</b><p>These are architecture profiles only. Real capability requires licensed data, completed cloud training, held-out evaluation and a verified model bundle.</p></section><div class="ai-section-head"><div><span class="eyebrow">MODEL FAMILY</span><h2>First-party model profiles</h2></div><span class="section-note">RANDOM INITIALIZATION ONLY</span></div><div class="ai-model-grid">${cards}</div><section class="ai-installed panel"><div class="panel-heading"><div><span class="eyebrow">LOCAL MODEL LIBRARY</span><h2>Imported model bundles</h2></div><button class="button button-primary" id="ai-import-model">Import extracted bundle folder</button></div><div id="ai-imported-models" class="ai-imported-list"><p>Checking installed models…</p></div><section class="ai-chat"><div><span class="eyebrow">LOCAL INFERENCE</span><h3>Test an imported model</h3></div><select id="ai-chat-model" aria-label="Installed model"><option value="">Select an imported model</option></select><textarea id="ai-chat-prompt" rows="4" placeholder="Ask the selected MMD model to help design a game mechanic…"></textarea><div class="ai-chat-actions"><label for="ai-max-tokens">RESPONSE TOKENS</label><select id="ai-max-tokens"><option value="128">128</option><option value="256" selected>256</option><option value="512">512</option><option value="1024">1024</option></select><button class="button button-primary" id="ai-chat-generate">Generate response</button><button class="button button-ghost" id="ai-chat-clear">Clear conversation</button><span id="ai-runtime-status">Runtime stopped</span></div><pre id="ai-chat-output">Generated responses will appear here.</pre><div id="ai-tool-proposal" class="ai-tool-proposal" hidden></div><pre id="ai-tool-result" class="ai-tool-result" hidden></pre></section><small class="ai-fineprint">Import verifies SHA-256 hashes and from-scratch lineage. Extract the ZIP bundle first. Local inference requires a Python environment with PyTorch and tokenizers installed.</small></section><section class="ai-pipeline"><div><span class="eyebrow">TRAINING PIPELINE</span><h2>From dataset to verified model</h2><p>Dataset Studio → Cloud Training → Evaluation → Model Bundle → Desktop Runtime.</p></div><button class="button button-ghost" data-ai-action="training">View training pipeline</button></section></div>`;
+}
+function trainingView():string {
+  return `<div class="ai-page"><div class="page-heading"><div><div class="eyebrow">MMD CLOUD TRAINING</div><h1>Model <span>Workshop</span></h1><p class="page-lead">Prepare reproducible model configurations and estimate their parameter and memory requirements.</p></div></div><section class="ai-warning"><b>No cloud job is running.</b><p>Start Kaggle or Colab manually from its official interface. Free GPU availability is not guaranteed. Never add API keys or private datasets to this public repository.</p></section><section class="ai-workshop panel"><div class="ai-workshop-copy"><span class="eyebrow">MODEL FACTORY / CONFIGURATION BUILDER</span><h2>Create a model configuration</h2><p>Select a from-scratch architecture profile. This creates a configuration file only; it does not create trained weights.</p><label for="ai-profile">MODEL PROFILE</label><select id="ai-profile">${(Object.keys(modelProfiles) as ModelProfile[]).map(k=>`<option value="${k}">${modelProfiles[k].name}</option>`).join("")}</select><label for="ai-seed">RANDOM INITIALIZATION SEED</label><input id="ai-seed" type="number" min="1" max="2147483647" value="20261108"/><div id="ai-estimate" class="ai-estimate"></div><button class="button button-primary" id="ai-download-config">↓ Export model config (.json)</button><p class="ai-fineprint">Memory is a lower-bound estimate. Activations, CUDA workspace and framework overhead are additional.</p></div><aside class="ai-workshop-side"><span class="eyebrow">NEXT STEPS</span><ol><li>Review document-level source rights with MCT-10 before preparing any corpus.</li><li>Prepare the approved corpus with Dataset Studio and preserve provenance.</li><li>Review the model configuration and resource estimate.</li><li>Run the notebook manually in Kaggle or Colab; save checkpoints before session limits.</li><li>Evaluate held-out tasks and export a hash-verified model bundle.</li><li>Import the extracted bundle into the desktop runtime and test it locally.</li><li>Complete MCT-11 human review and a real UnrealBuildTool build before any release decision.</li></ol><a href="https://github.com/pctaha501-create/MMD-GameForge/tree/feat/mmd-cloud-training-mct-02/cloud/notebooks" target="_blank" rel="noreferrer">Open cloud notebook templates ↗</a><a href="https://github.com/pctaha501-create/MMD-GameForge/blob/feat/mmd-cloud-training-mct-02/docs/MCT_10_DATASET_SOURCE_REVIEW.md" target="_blank" rel="noreferrer">Dataset rights review ↗</a><a href="https://github.com/pctaha501-create/MMD-GameForge/blob/feat/mmd-cloud-training-mct-02/docs/MCT_11_MODEL_ACCEPTANCE.md" target="_blank" rel="noreferrer">Model acceptance gate ↗</a></aside></section></div>`;
+}
+
+function parseAIToolCall(output:string):unknown {
+  let trimmed=output.trim();
+  if(trimmed.startsWith("```")){
+    const newline=trimmed.indexOf("\n");
+    if(newline>=0)trimmed=trimmed.slice(newline+1);
+    if(trimmed.endsWith("```"))trimmed=trimmed.slice(0,-3).trim();
+  }
+  try{return JSON.parse(trimmed) as unknown;}catch{return null;}
+}
+function renderAIToolProposal(output:string):void {
+  const root=document.querySelector<HTMLDivElement>("#ai-tool-proposal");if(!root)return;
+  const parsed=parseAIToolCall(output);const result=validateAIToolCall(parsed);
+  if(!result.ok){root.hidden=true;root.innerHTML="";return;}
+  const labels:Record<string,string>={"project.list_files":"List project files","project.read_file":"Read project file","project.write_file":"Overwrite project file","project.create_file":"Create project file","scene.save":"Save scene","unreal.detect":"Detect Unreal Engine","unreal.validate_project":"Validate Unreal project structure","unreal.create_project":"Create Unreal C++ project scaffold","unreal.build_project":"Build Unreal project with UnrealBuildTool","unreal.launch":"Launch Unreal Editor"};
+  root.hidden=false;
+  root.innerHTML=`<div class="ai-tool-proposal-head"><b>Proposed GameForge action</b><span>USER APPROVAL REQUIRED</span></div><p>${escapeHtml(labels[result.value.tool]??result.value.tool)}</p><code>${escapeHtml(JSON.stringify(result.value.arguments,null,2))}</code><button class="button button-primary" id="ai-run-tool">Review and run action</button><small>Nothing has been changed. This allowlisted action runs only after you approve it.</small>`;
+  root.querySelector("#ai-run-tool")?.addEventListener("click",()=>void executeAITool(result.value));
+}
+async function executeAITool(call:{tool:string;arguments:Record<string,unknown>}):Promise<void>{
+  const result=document.querySelector<HTMLPreElement>("#ai-tool-result");
+  const proposal=document.querySelector<HTMLDivElement>("#ai-tool-proposal");
+  const project=activeProject;
+  if(!project){notify("Open a project before using project tools.","error");return;}
+  const a=call.arguments;
+  try{
+    let value:unknown;
+    switch(call.tool){
+      case "project.list_files":
+        value=await window.gameForge.listProjectFiles(project.path);break;
+      case "project.read_file":
+        value=await window.gameForge.readProjectFile(project.path,String(a.path));break;
+      case "project.write_file":
+        if(!window.confirm(`Allow MMD AI to overwrite ${String(a.path)} in this project?`))return;
+        value=await window.gameForge.writeProjectFile(project.path,String(a.path),String(a.content));break;
+      case "project.create_file":
+        if(!window.confirm(`Allow MMD AI to create ${String(a.path)} in this project?`))return;
+        value=await window.gameForge.createProjectFile(project.path,String(a.path),String(a.content));break;
+      case "scene.save":
+        if(!window.confirm(`Save scene "${String(a.scene_name)}" into this project?`))return;
+        value=await window.gameForge.saveScene(project.path,String(a.scene_name),String(a.content));break;
+      case "unreal.detect":
+        value=await window.gameForge.detectUnreal(project.path);break;
+      case "unreal.validate_project":
+        value=await window.gameForge.validateUnrealProject(project.path);break;
+      case "unreal.create_project":
+        if(!window.confirm(`Create Unreal C++ project ${String(a.project_name)} inside the active workspace?`))return;
+        value=await window.gameForge.createUnrealProject(project.path,String(a.project_name));break;
+      case "unreal.build_project":
+        if(!window.confirm("Run UnrealBuildTool to compile the active Unreal project for Win64 Development? This may take several minutes."))return;
+        value=await window.gameForge.buildUnrealProject(project.path);break;
+      case "unreal.launch":{
+        const status=await window.gameForge.detectUnreal(project.path);
+        if(!status.projectFile)throw new Error("No .uproject file was found in the active project.");
+        if(!status.installed||!status.editorPath)throw new Error("Unreal Editor was not detected. Configure its path in Settings.");
+        if(!window.confirm("Launch Unreal Editor with the active project?"))return;
+        value=await window.gameForge.launchUnreal(status.projectFile,status.editorPath);break;
+      }
+      default: throw new Error("This tool is not allowlisted.");
+    }
+    if(result){result.hidden=false;result.textContent=JSON.stringify(value,null,2);}
+    if(proposal)proposal.hidden=true;
+    notify("Approved GameForge action completed.");
+  }catch(error){if(result){result.hidden=false;result.textContent=error instanceof Error?error.message:"Tool execution failed.";}notify(error instanceof Error?error.message:"Tool execution failed.","error");}
+}
+
+function bindAIEvents():void {
+  document.querySelectorAll<HTMLElement>("[data-ai-action]").forEach(node=>node.addEventListener("click",()=>setView(node.dataset.aiAction==="training"?"training":"training")));
+  const importButton=document.querySelector<HTMLButtonElement>("#ai-import-model");
+  const importedList=document.querySelector<HTMLDivElement>("#ai-imported-models");
+  const refreshModels=async()=>{
+    if(!importedList)return;
+    try{
+      const models=await window.gameForge.listModels();
+      const stateLabel=document.querySelector<HTMLParagraphElement>("#ai-model-state");
+      if(stateLabel)stateLabel.textContent=models.length?`${models.length} verified model bundle(s) installed. Runtime must be started before generation.`:"Research status — no trained model is installed yet.";
+      const select=document.querySelector<HTMLSelectElement>("#ai-chat-model");
+      const previous=select?.value;
+      if(select)select.innerHTML=`<option value="">Select an imported model</option>`+models.map(model=>`<option value="${escapeHtml(model.id)}">${escapeHtml(model.modelFamily)}${model.running?" · RUNNING":""}</option>`).join("");
+      if(select&&models.some(model=>model.id===previous))select.value=previous!;
+      importedList.innerHTML=models.length?models.map(model=>`<article class="ai-imported-row"><div><b>${escapeHtml(model.modelFamily)}</b><small>Installed ${new Date(model.installedAt).toLocaleString()} · Dataset ${escapeHtml(model.datasetRevision)} · ${model.runtimeDevice?escapeHtml(model.runtimeDevice):"Runtime stopped"}</small></div><span class="ai-status">${model.running?"RUNTIME READY":"HASH VERIFIED"}</span><strong>${model.testLoss===null?"No loss":`Test loss ${model.testLoss.toFixed(3)}`}</strong><button class="button button-ghost" data-model-runtime="${escapeHtml(model.id)}">${model.running?"Stop runtime":"Start runtime"}</button></article>`).join(""):`<p class="ai-empty-models">No verified model bundles imported yet.</p>`;
+      importedList.querySelectorAll<HTMLButtonElement>("[data-model-runtime]").forEach(button=>button.addEventListener("click",async()=>{
+        const id=button.dataset.modelRuntime!;button.disabled=true;
+        try{if(models.find(model=>model.id===id)?.running){await window.gameForge.stopModel(id);notify("Local model runtime stopped.");}
+        else{const result=await window.gameForge.startModel(id);if(result)notify(`Local runtime ready on ${result.device}.`);}
+        await refreshModels();}
+        catch(error){notify(error instanceof Error?error.message:"Could not change model runtime state.","error");}
+        finally{button.disabled=false;}
+      }));
+      const status=document.querySelector<HTMLSpanElement>("#ai-runtime-status");
+      if(status)status.textContent=models.some(model=>model.running)?"At least one local runtime is running":"Runtime stopped";
+    }catch(error){importedList.textContent=error instanceof Error?error.message:"Could not read model inventory.";}
+  };
+  void refreshModels();
+  importButton?.addEventListener("click",async()=>{
+    importButton.disabled=true;importButton.textContent="Verifying bundle…";
+    try{const model=await window.gameForge.importModelBundleFolder();if(model){notify(`Imported ${model.modelFamily} after hash verification.`);await refreshModels();}}
+    catch(error){notify(error instanceof Error?error.message:"Model import failed.","error");}
+    finally{importButton.disabled=false;importButton.textContent="Import extracted bundle folder";}
+  });
+
+  document.querySelector<HTMLButtonElement>("#ai-chat-clear")?.addEventListener("click",()=>{aiConversation=[];const output=document.querySelector<HTMLPreElement>("#ai-chat-output");if(output)output.textContent="Conversation cleared. Start a new chat.";const proposal=document.querySelector<HTMLDivElement>("#ai-tool-proposal");if(proposal){proposal.hidden=true;proposal.innerHTML="";}const result=document.querySelector<HTMLPreElement>("#ai-tool-result");if(result){result.hidden=true;result.textContent="";}});
+
+  document.querySelector<HTMLButtonElement>("#ai-chat-generate")?.addEventListener("click",async()=>{
+    const modelId=document.querySelector<HTMLSelectElement>("#ai-chat-model")?.value;
+    const prompt=document.querySelector<HTMLTextAreaElement>("#ai-chat-prompt")?.value??"";
+    const output=document.querySelector<HTMLPreElement>("#ai-chat-output");
+    const button=document.querySelector<HTMLButtonElement>("#ai-chat-generate");
+    if(!modelId){notify("Import and select a model first.","error");return;}
+    if(!prompt.trim()){notify("Enter a prompt first.","error");return;}
+    if(button){button.disabled=true;button.textContent="Generating…";}
+    if(output)output.textContent="The local model is generating…";
+    try{
+      aiConversation.push({role:"user",content:prompt});
+      const projectContext=activeProject?`Active project: ${activeProject.name}. Project tools operate only inside this folder.\n`:"No active project is open. Do not propose project tools.\n";
+      const history=aiConversation.slice(-8).map(message=>`${message.role==="user"?"User":"Assistant"}: ${message.content}`).join("\n\n");
+      const systemPrompt=`You are MMD GameForge AI. Help with Unreal game development. You may answer normally. If you need a project action, output exactly one JSON object using schema_version "mmd.tool-call.v1", an allowlisted tool, and arguments. Allowed tools: project.list_files {}, project.read_file {path}, project.write_file {path,content}, project.create_file {path,content}, scene.save {scene_name,content}, unreal.detect {}, unreal.validate_project {}, unreal.create_project {project_name}, unreal.build_project {}, unreal.launch {}. Never output shell commands or arbitrary code execution requests. Ask before destructive actions; the desktop will independently require approval. Do not claim a tool ran unless its result is provided.\n${projectContext}Conversation:\n${history}\nAssistant:`;
+      const maxNewTokens=Number(document.querySelector<HTMLSelectElement>("#ai-max-tokens")?.value??256);
+      const result=await window.gameForge.generateWithModel(modelId,systemPrompt,{maxNewTokens,temperature:.8,topK:40});
+      const answer=result.output||"(The model returned an empty response.)";
+      aiConversation.push({role:"assistant",content:answer});
+      aiConversation=aiConversation.slice(-12);
+      if(output)output.textContent=aiConversation.map(message=>`${message.role==="user"?"YOU":"MMD AI"}:\n${message.content}`).join("\n\n");
+      renderAIToolProposal(result.output);notify(`Generated with ${result.modelFamily} on ${result.device}.`);
+    }
+    catch(error){if(output)output.textContent=error instanceof Error?error.message:"Generation failed.";notify(error instanceof Error?error.message:"Generation failed.","error");}
+    finally{if(button){button.disabled=false;button.textContent="Generate response";}}
+  });
+
+  const profile=document.querySelector<HTMLSelectElement>("#ai-profile");
+  const seed=document.querySelector<HTMLInputElement>("#ai-seed");
+  const estimate=document.querySelector<HTMLDivElement>("#ai-estimate");
+  const update=()=>{
+    if(!profile||!seed||!estimate)return;
+    const key=profile.value as ModelProfile,e=modelEstimate(key),p=modelProfiles[key];
+    estimate.innerHTML=`<div><small>MODEL PARAMETERS</small><b>${e.parameters.toLocaleString()}</b></div><div><small>FP32 WEIGHTS</small><b>${e.weightMiB.toFixed(1)} MiB</b></div><div><small>ADAMW LOWER BOUND</small><b>${e.adamMiB.toFixed(1)} MiB</b></div><p>${p.layers} layers · ${p.hidden} hidden · ${p.heads} attention heads · ${p.seq} context</p>`;
+  };
+  profile?.addEventListener("change",update);seed?.addEventListener("input",update);update();
+  document.querySelector("#ai-download-config")?.addEventListener("click",()=>{
+    const value=Number(seed?.value);if(!Number.isSafeInteger(value)||value<1||value>2147483647){notify("Enter a valid positive integer seed.","error");return;}
+    downloadModelConfig(profile!.value as ModelProfile,value);notify("Model configuration exported. No weights were created.");
+  });
+}
+
 function moduleView(view: Exclude<View, "dashboard" | "projects">): string {
+  if (view === "ai") return aiCoreView();
+  if (view === "training") return trainingView();
   if (["world", "code", "assets", "settings"].includes(view)) return renderProfessional(view as "world" | "code" | "assets" | "settings", activeProject);
   const data = {
     world: ["WORLD BUILDER", "Shape the world.", "A dedicated space for level planning, scene organization, and environment workflows.", "Scene graph and Unreal level tooling will connect here in a later integration phase.", "cube", "WORLD PIPELINE"],
@@ -164,6 +357,7 @@ function bindShellEvents(): void {
   document.querySelector("#search-button")?.addEventListener("click", () => notify("Search will be connected to your project index in a later phase."));
   document.querySelector(".sidebar-collapse")?.addEventListener("click", () => document.querySelector(".app-shell")?.classList.toggle("sidebar-compact"));
   if (["world", "code", "assets", "settings"].includes(currentView)) void bindProfessional(currentView as "world" | "code" | "assets" | "settings", activeProject, notify);
+  if (currentView === "ai" || currentView === "training") bindAIEvents();
 }
 function showCreateModal(): void {
   const root = document.querySelector<HTMLDivElement>("#modal-root")!;

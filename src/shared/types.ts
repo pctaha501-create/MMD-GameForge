@@ -18,14 +18,22 @@ export interface AppInfo {
   isPackaged: boolean;
 }
 
+export interface ImportedModel { id:string; modelFamily:string; installedAt:string; datasetRevision:string; testLoss:number|null; parameterStatus:string; folder:string; running:boolean; runtimeDevice:string|null; }
+
 export interface DesktopAPI {
   getAppInfo(): Promise<AppInfo>;
+  listModels(): Promise<ImportedModel[]>;
+  startModel(modelId:string):Promise<{running:boolean;device:string}|null>;
+  stopModel(modelId:string):Promise<boolean>;
+  generateWithModel(modelId:string,prompt:string,options?:{maxNewTokens?:number;temperature?:number;topK?:number}):Promise<{output:string;modelFamily:string;device:string}>;
+  importModelBundleFolder(): Promise<ImportedModel | null>;
   createProject(name: string): Promise<ProjectSummary | null>;
   openProject(): Promise<ProjectSummary | null>;
   inspectProject(projectPath: string): Promise<ProjectSummary>;
   listProjectFiles(projectPath: string): Promise<ProjectFileNode[]>;
   readProjectFile(projectPath: string, relativePath: string): Promise<{ content: string; size: number }>;
   writeProjectFile(projectPath: string, relativePath: string, content: string): Promise<{ saved: boolean }>;
+  createProjectFile(projectPath:string,relativePath:string,content:string):Promise<{saved:boolean;created:boolean}>;
   listProjectAssets(projectPath: string): Promise<ProjectFileNode[]>;
   importAssets(projectPath: string): Promise<string[]>;
   readProjectAsset(projectPath: string, relativePath: string): Promise<Uint8Array>;
@@ -35,6 +43,9 @@ export interface DesktopAPI {
   getSettings(): Promise<StudioSettings>;
   saveSettings(settings: StudioSettings): Promise<StudioSettings>;
   detectUnreal(projectPath: string): Promise<UnrealStatus>;
+  validateUnrealProject(projectPath:string):Promise<{valid:boolean;projectFile:string|null;errors:string[];warnings:string[];modules:string[];sourceFiles:number;buildFiles:number;buildPerformed:false}>;
+  createUnrealProject(projectPath:string,projectName:string):Promise<{created:boolean;name:string;projectPath:string;projectFile:string;files:string[]}>;
+  buildUnrealProject(projectPath:string):Promise<{success:boolean;exitCode:number|null;projectFile:string;elapsedMs:number;stdout:string;stderr:string}>;
   launchUnreal(projectFile: string, editorPath?: string): Promise<boolean>;
 }
 
