@@ -102,37 +102,8 @@ def main():
                 f"for sequence length {seq_len}. Add more licensed documents or use a smaller max_sequence_length."
             )
 
-    class MMDTransformer(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.token = nn.Embedding(arch["vocab_size"], arch["hidden_size"])
-            self.position = nn.Embedding(seq_len, arch["hidden_size"])
-            layer = nn.TransformerEncoderLayer(
-                d_model=arch["hidden_size"], nhead=arch["num_attention_heads"],
-                dim_feedforward=arch["hidden_size"] * arch["feed_forward_multiplier"],
-                dropout=arch["dropout"], activation="gelu", batch_first=True, norm_first=True,
-            )
-            self.blocks = nn.TransformerEncoder(layer, num_layers=arch["num_layers"], enable_nested_tensor=False)
-            self.norm = nn.LayerNorm(arch["hidden_size"])
-            self.head = nn.Linear(arch["hidden_size"], arch["vocab_size"], bias=False)
-            if arch.get("tie_word_embeddings", True):
-                self.head.weight = self.token.weight
-            self.register_buffer("causal_mask", torch.triu(torch.ones(seq_len, seq_len, dtype=torch.bool), diagonal=1), persistent=False)
-            self.apply(self._init)
-        @staticmethod
-        def _init(module):
-            if isinstance(module, (nn.Linear, nn.Embedding)):
-                nn.init.normal_(module.weight, mean=0.0, std=0.02)
-                if isinstance(module, nn.Linear) and module.bias is not None:
-                    nn.init.zeros_(module.bias)
-        def forward(self, ids):
-            length = ids.size(1)
-            positions = torch.arange(length, device=ids.device).unsqueeze(0)
-            hidden = self.token(ids) + self.position(positions)
-            hidden = self.blocks(hidden, mask=self.causal_mask[:length, :length])
-            return self.head(self.norm(hidden))
-
-    model = MMDTransformer().to(device)
+    from model import build_model
+    model = build_model(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_cfg["learning_rate"], weight_decay=train_cfg["weight_decay"])
     warmup = max(1, int(train_cfg.get("warmup_steps", 1)))
     def lr_factor(step):
