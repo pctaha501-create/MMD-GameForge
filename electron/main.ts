@@ -193,7 +193,7 @@ ipcMain.handle("models:import-folder", async () => {
   if (manifest.schema_version !== "mct.model-bundle.v1") throw new Error("Unsupported MMD model bundle version.");
   if (manifest.initialization?.weights_origin !== "random_initialization") throw new Error("This bundle is not verified as a from-scratch MMD model.");
   if (!manifest.model_family || !Array.isArray(manifest.files) || manifest.files.length < 4) throw new Error("Bundle manifest is incomplete.");
-  const allowed = new Set(["checkpoint.pt", "tokenizer.json", "checkpoint-manifest.json", "mmd-multilingual-pilot.json", "evaluation.json", "config.json"]);
+  const allowed = new Set(["checkpoint.pt", "tokenizer.json", "checkpoint-manifest.json", "mmd-multilingual-pilot.json", "mmd-base-1b-bilingual.json", "evaluation.json", "config.json"]);
   const names = new Set<string>();
   let total = 0;
   for (const item of manifest.files) {

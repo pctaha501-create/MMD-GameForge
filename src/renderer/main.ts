@@ -135,11 +135,12 @@ function projectView(): string {
   <div class="footnote"><span>i</span> FILES ARE ONLY LISTED HERE. GAMEFORGE DOES NOT MODIFY OR DELETE YOUR EXISTING PROJECT CONTENTS.</div>`;
 }
 
-type ModelProfile = "multilingual-tiny" | "multilingual-pilot" | "code-tiny" | "game-design-tiny" | "game-agent-tiny";
+type ModelProfile = "bilingual-base-1b" | "multilingual-tiny" | "multilingual-pilot" | "code-tiny" | "game-design-tiny" | "game-agent-tiny";
 const modelProfiles: Record<ModelProfile, {name:string;description:string;vocab:number;seq:number;hidden:number;layers:number;heads:number;steps:number;languages:string[]}> = {
-  "multilingual-tiny": {name:"MMD Multilingual Tiny",description:"Smallest multilingual experiment for verifying the end-to-end pipeline.",vocab:8000,seq:256,hidden:128,layers:2,heads:4,steps:500,languages:["fa","en","de","fr","es","ar","zh","hi"]},
-  "multilingual-pilot": {name:"MMD Multilingual Base",description:"The initial multilingual pilot configuration. Requires cloud VRAM measurement.",vocab:16000,seq:512,hidden:384,layers:6,heads:6,steps:2000,languages:["fa","en","de","fr","es","ar","zh","hi"]},
-  "code-tiny": {name:"MMD Code Tiny",description:"A from-scratch code-language experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["code"]},
+  "bilingual-base-1b": {name:"MMD Base 1B (Persian + English)",description:"The main bilingual Base test target: ~1.023B parameters, random initialization, cloud CUDA GPU with at least 24 GiB preflight.",vocab:32000,seq:256,hidden:2048,layers:19,heads:16,steps:1000,languages:["fa","en"]},
+  "multilingual-tiny": {name:"MMD Bilingual Tiny",description:"Small Persian/English experiment for verifying the end-to-end pipeline.",vocab:8000,seq:256,hidden:128,layers:2,heads:4,steps:500,languages:["fa","en"]},
+  "multilingual-pilot": {name:"MMD Bilingual Pilot",description:"Small Persian/English pilot for measuring the end-to-end cloud training pipeline.",vocab:16000,seq:512,hidden:384,layers:6,heads:6,steps:2000,languages:["fa","en"]},
+  "code-tiny": {name:"MMD Code Tiny",description:"A from-scratch code-language experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["en","fa"]},
   "game-design-tiny": {name:"MMD Game Design Tiny",description:"A from-scratch game-design text experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["en","fa"]},
   "game-agent-tiny": {name:"MMD Game Agent Tiny",description:"A from-scratch instruction model for structured GameForge tool calls; requires a dedicated licensed tool-use dataset.",vocab:12000,seq:512,hidden:192,layers:4,heads:6,steps:1000,languages:["en","fa"]},
 };
@@ -153,14 +154,14 @@ function modelEstimate(profile: ModelProfile): {parameters:number;weightMiB:numb
 function makeModelConfig(profile: ModelProfile, seed:number): object {
   const p=modelProfiles[profile];
   return {
-    schema_version:"mct.model-config.v1",model_family:p.name,stage:"experiment",
+    schema_version:"mct.model-config.v1",model_family:p.name,stage:profile==="bilingual-base-1b"?"base-test":"experiment",
     description:p.description+" Random initialization only; no pretrained weights.",
     architecture:{type:"decoder_only_transformer",vocab_size:p.vocab,max_sequence_length:p.seq,hidden_size:p.hidden,num_layers:p.layers,num_attention_heads:p.heads,feed_forward_multiplier:4,dropout:0.1,tie_word_embeddings:true},
     tokenizer:{type:"byte_level_bpe",training_from_scratch:true,target_vocab_size:p.vocab,normalization:"unicode_nfc",languages:p.languages},
     initialization:{weights:"random",method:"architecture_defined",seed},
-    training:{objective:"causal_language_modeling_next_token_prediction",optimizer:"adamw",learning_rate:0.0003,weight_decay:0.1,warmup_steps:Math.max(1,Math.round(p.steps*0.1)),max_steps:p.steps,micro_batch_size:1,gradient_accumulation_steps:8,gradient_clipping:1,precision:"auto",checkpoint_interval_steps:Math.max(10,Math.min(100,Math.round(p.steps/10))),evaluation_interval_steps:Math.max(10,Math.min(100,Math.round(p.steps/10))),resume_from_checkpoint:true},
+    training:{objective:"causal_language_modeling_next_token_prediction",optimizer:"adamw",learning_rate:profile==="bilingual-base-1b"?0.0001:0.0003,weight_decay:0.1,warmup_steps:profile==="bilingual-base-1b"?100:Math.max(1,Math.round(p.steps*0.1)),max_steps:p.steps,micro_batch_size:1,gradient_accumulation_steps:profile==="bilingual-base-1b"?16:8,gradient_clipping:1,precision:"auto",checkpoint_interval_steps:profile==="bilingual-base-1b"?25:Math.max(10,Math.min(100,Math.round(p.steps/10))),evaluation_interval_steps:profile==="bilingual-base-1b"?50:Math.max(10,Math.min(100,Math.round(p.steps/10))),resume_from_checkpoint:true},
     data:{require_license_record:true,require_provenance_record:true,deduplicate:true,split:["train","validation","test"],language_balance:"measure_before_sampling"},
-    resource_policy:{target:"free_compliant_cloud_notebooks",paid_fallback:false,user_started_sessions_only:true,save_checkpoint_before_runtime_limit:true}
+    resource_policy:{target:"free_compliant_cloud_notebooks",paid_fallback:false,user_started_sessions_only:true,save_checkpoint_before_runtime_limit:true,...(profile==="bilingual-base-1b"?{require_cuda:true,minimum_gpu_memory_gib:24,hardware_note:"AdamW state lower bound is about 15.25 GiB before activations and runtime overhead; 24 GiB is a minimum preflight, not a fit guarantee."}:{})}
   };
 }
 function downloadModelConfig(profile:ModelProfile,seed:number):void {
