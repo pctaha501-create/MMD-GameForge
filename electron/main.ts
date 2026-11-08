@@ -8,6 +8,8 @@ import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings } fr
 
 const { validateProjectName } = projectNameRules;
 const isDevelopment = !app.isPackaged;
+const { AiCore } = require("./ai-core.cjs") as { AiCore: new (storagePath: string) => { initialize(): Promise<void>; status(): Promise<unknown>; importDataset(path: string): Promise<unknown>; listDatasets(): Promise<unknown>; train(id: string, name: string): Promise<unknown>; listModels(): Promise<unknown>; generate(id: string, prompt: string, length: number): Promise<string> } };
+const aiCore = new AiCore(path.join(app.getPath("userData"), "ai-core"));
 let mainWindow: BrowserWindow | null = null;
 
 async function summarizeProject(projectPath: string): Promise<ProjectSummary> {
@@ -212,6 +214,23 @@ ipcMain.handle("project:reveal", async (_event, projectPath: unknown, relativePa
   if (typeof relativePath === "string" && relativePath) { const { target } = await safeProjectFile(projectPath, relativePath); shell.showItemInFolder(target); }
   else shell.showItemInFolder(await realpath(projectPath)); return true;
 });
+ipcMain.handle("ai:status", () => aiCore.status());
+ipcMain.handle("ai:dataset:import", async () => {
+  const selected = await dialog.showOpenDialog({ title: "Import a UTF-8 training corpus", properties: ["openFile"], filters: [{ name: "Text datasets", extensions: ["txt"] }] });
+  if (selected.canceled || !selected.filePaths[0]) return null;
+  return aiCore.importDataset(selected.filePaths[0]);
+});
+ipcMain.handle("ai:datasets:list", () => aiCore.listDatasets());
+ipcMain.handle("ai:model:train", (_event, datasetId: unknown, modelName: unknown) => {
+  if (typeof datasetId !== "string" || typeof modelName !== "string" || modelName.length > 128) throw new Error("Invalid training request.");
+  return aiCore.train(datasetId, modelName);
+});
+ipcMain.handle("ai:models:list", () => aiCore.listModels());
+ipcMain.handle("ai:generate", (_event, modelId: unknown, prompt: unknown, maxCharacters: unknown) => {
+  if (typeof modelId !== "string" || typeof prompt !== "string" || prompt.length > 1000 || typeof maxCharacters !== "number") throw new Error("Invalid generation request.");
+  return aiCore.generate(modelId, prompt, maxCharacters);
+});
+
 ipcMain.handle("settings:get", () => readStudioSettings());
 ipcMain.handle("settings:save", (_event, value: unknown) => writeStudioSettings(value));
 ipcMain.handle("unreal:detect", async (_event, projectPath: unknown) => {
@@ -227,7 +246,8 @@ ipcMain.handle("unreal:launch", async (_event, projectFile: unknown, editorPath?
   return true;
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await aiCore.initialize();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

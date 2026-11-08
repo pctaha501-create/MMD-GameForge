@@ -36,6 +36,12 @@ export interface DesktopAPI {
   saveSettings(settings: StudioSettings): Promise<StudioSettings>;
   detectUnreal(projectPath: string): Promise<UnrealStatus>;
   launchUnreal(projectFile: string, editorPath?: string): Promise<boolean>;
+  getAiStatus(): Promise<AiStatus>;
+  importAiDataset(): Promise<AiDatasetInfo | null>;
+  listAiDatasets(): Promise<AiDatasetInfo[]>;
+  trainAiModel(datasetId: string, modelName: string): Promise<AiModelInfo>;
+  listAiModels(): Promise<AiModelInfo[]>;
+  generateAiText(modelId: string, prompt: string, maxCharacters: number): Promise<string>;
 }
 
 declare global {
@@ -47,3 +53,7 @@ declare global {
 export interface ProjectFileNode { name: string; path: string; kind: "file" | "folder"; size: number; extension: string; }
 export interface UnrealStatus { installed: boolean; editorPath: string | null; projectFile: string | null; }
 export interface StudioSettings { editorFontSize?: number; wordWrap?: boolean; confirmExternal?: boolean; unrealEditorPath?: string; }
+
+export interface AiDatasetInfo { id: string; name: string; bytes: number; characters: number; createdAt: string; }
+export interface AiModelInfo { id: string; name: string; datasetName: string; createdAt: string; trainedCharacters: number; vocabularySize: number; contextLength: number; kind: string; }
+export interface AiStatus { runtime: string; mode: "offline"; datasets: number; models: number; storagePath: string; modelKind: string; limitations: string[]; }
