@@ -132,7 +132,69 @@ function projectView(): string {
   <section class="panel file-panel">${entries.length ? entries.map((entry) => `<div class="file-row"><span class="file-icon ${entry.kind}">${icon(entry.kind === "folder" ? "folder" : "code",17)}</span><strong>${escapeHtml(entry.name)}</strong><small>${entry.kind.toUpperCase()}</small></div>`).join("") : `<div class="empty-state"><strong>This folder is empty</strong><p>GameForge can use this directory as your project workspace.</p></div>`}</section>
   <div class="footnote"><span>i</span> FILES ARE ONLY LISTED HERE. GAMEFORGE DOES NOT MODIFY OR DELETE YOUR EXISTING PROJECT CONTENTS.</div>`;
 }
+
+type ModelProfile = "multilingual-tiny" | "multilingual-pilot" | "code-tiny" | "game-design-tiny";
+const modelProfiles: Record<ModelProfile, {name:string;description:string;vocab:number;seq:number;hidden:number;layers:number;heads:number;steps:number;languages:string[]}> = {
+  "multilingual-tiny": {name:"MMD Multilingual Tiny",description:"Smallest multilingual experiment for verifying the end-to-end pipeline.",vocab:8000,seq:256,hidden:128,layers:2,heads:4,steps:500,languages:["fa","en","de","fr","es","ar","zh","hi"]},
+  "multilingual-pilot": {name:"MMD Multilingual Base",description:"The initial multilingual pilot configuration. Requires cloud VRAM measurement.",vocab:16000,seq:512,hidden:384,layers:6,heads:6,steps:2000,languages:["fa","en","de","fr","es","ar","zh","hi"]},
+  "code-tiny": {name:"MMD Code Tiny",description:"A from-scratch code-language experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["code"]},
+  "game-design-tiny": {name:"MMD Game Design Tiny",description:"A from-scratch game-design text experiment; not yet trained or benchmarked.",vocab:12000,seq:256,hidden:192,layers:3,heads:6,steps:800,languages:["en","fa"]},
+};
+function modelEstimate(profile: ModelProfile): {parameters:number;weightMiB:number;adamMiB:number} {
+  const p=modelProfiles[profile],d=p.hidden,ff=d*4;
+  const embedding=p.vocab*d+p.seq*d;
+  const attention=4*d*d+4*d,feed=d*ff+ff+ff*d+d,norm=4*d;
+  const total=embedding+p.layers*(attention+feed+norm)+2*d;
+  return {parameters:total,weightMiB:total*4/1048576,adamMiB:total*16/1048576};
+}
+function makeModelConfig(profile: ModelProfile, seed:number): object {
+  const p=modelProfiles[profile];
+  return {
+    schema_version:"mct.model-config.v1",model_family:p.name,stage:"experiment",
+    description:p.description+" Random initialization only; no pretrained weights.",
+    architecture:{type:"decoder_only_transformer",vocab_size:p.vocab,max_sequence_length:p.seq,hidden_size:p.hidden,num_layers:p.layers,num_attention_heads:p.heads,feed_forward_multiplier:4,dropout:0.1,tie_word_embeddings:true},
+    tokenizer:{type:"byte_level_bpe",training_from_scratch:true,target_vocab_size:p.vocab,normalization:"unicode_nfc",languages:p.languages},
+    initialization:{weights:"random",method:"architecture_defined",seed},
+    training:{objective:"causal_language_modeling_next_token_prediction",optimizer:"adamw",learning_rate:0.0003,weight_decay:0.1,warmup_steps:Math.max(1,Math.round(p.steps*0.1)),max_steps:p.steps,micro_batch_size:1,gradient_accumulation_steps:8,gradient_clipping:1,precision:"auto",checkpoint_interval_steps:Math.max(10,Math.min(100,Math.round(p.steps/10))),evaluation_interval_steps:Math.max(10,Math.min(100,Math.round(p.steps/10))),resume_from_checkpoint:true},
+    data:{require_license_record:true,require_provenance_record:true,deduplicate:true,split:["train","validation","test"],language_balance:"measure_before_sampling"},
+    resource_policy:{target:"free_compliant_cloud_notebooks",paid_fallback:false,user_started_sessions_only:true,save_checkpoint_before_runtime_limit:true}
+  };
+}
+function downloadModelConfig(profile:ModelProfile,seed:number):void {
+  const blob=new Blob([JSON.stringify(makeModelConfig(profile,seed),null,2)+"\\n"],{type:"application/json"});
+  const url=URL.createObjectURL(blob);const anchor=document.createElement("a");
+  anchor.href=url;anchor.download=profile+".json";anchor.click();URL.revokeObjectURL(url);
+}
+function aiCoreView():string {
+  const cards=(Object.keys(modelProfiles) as ModelProfile[]).map(profile=>{
+    const p=modelProfiles[profile],e=modelEstimate(profile);
+    return `<article class="ai-model-card"><div class="ai-model-top"><span class="ai-model-symbol">✳</span><span class="ai-status">CONFIG ONLY</span></div><h3>${p.name}</h3><p>${p.description}</p><div class="ai-model-stats"><span><b>${e.parameters.toLocaleString()}</b><small>PARAMETERS</small></span><span><b>${e.weightMiB.toFixed(1)} MiB</b><small>FP32 WEIGHTS</small></span></div><small class="ai-model-languages">${p.languages.join(" · ").toUpperCase()}</small></article>`;
+  }).join("");
+  return `<div class="ai-page"><div class="page-heading"><div><div class="eyebrow">FIRST-PARTY INTELLIGENCE</div><h1>MMD AI <span>Core</span></h1><p class="page-lead">A family of models designed, initialized and trained by MMD GameForge.</p></div><button class="button button-primary" data-ai-action="workshop">Open Model Workshop ↗</button></div><section class="ai-warning"><b>Research status — no trained model is installed yet.</b><p>These are architecture profiles only. Real capability requires licensed data, completed cloud training, held-out evaluation and a verified model bundle.</p></section><div class="ai-section-head"><div><span class="eyebrow">MODEL FAMILY</span><h2>First-party model profiles</h2></div><span class="section-note">RANDOM INITIALIZATION ONLY</span></div><div class="ai-model-grid">${cards}</div><section class="ai-pipeline"><div><span class="eyebrow">TRAINING PIPELINE</span><h2>From dataset to verified model</h2><p>Dataset Studio → Cloud Training → Evaluation → Model Bundle → Desktop Runtime.</p></div><button class="button button-ghost" data-ai-action="training">View training pipeline</button></section></div>`;
+}
+function trainingView():string {
+  return `<div class="ai-page"><div class="page-heading"><div><div class="eyebrow">MMD CLOUD TRAINING</div><h1>Model <span>Workshop</span></h1><p class="page-lead">Prepare reproducible model configurations and estimate their parameter and memory requirements.</p></div></div><section class="ai-warning"><b>No cloud job is running.</b><p>Start Kaggle or Colab manually from its official interface. Free GPU availability is not guaranteed. Never add API keys or private datasets to this public repository.</p></section><section class="ai-workshop panel"><div class="ai-workshop-copy"><span class="eyebrow">MODEL FACTORY / CONFIGURATION BUILDER</span><h2>Create a model configuration</h2><p>Select a from-scratch architecture profile. This creates a configuration file only; it does not create trained weights.</p><label for="ai-profile">MODEL PROFILE</label><select id="ai-profile">${(Object.keys(modelProfiles) as ModelProfile[]).map(k=>`<option value="${k}">${modelProfiles[k].name}</option>`).join("")}</select><label for="ai-seed">RANDOM INITIALIZATION SEED</label><input id="ai-seed" type="number" min="1" max="2147483647" value="20261108"/><div id="ai-estimate" class="ai-estimate"></div><button class="button button-primary" id="ai-download-config">↓ Export model config (.json)</button><p class="ai-fineprint">Memory is a lower-bound estimate. Activations, CUDA workspace and framework overhead are additional.</p></div><aside class="ai-workshop-side"><span class="eyebrow">NEXT STEPS</span><ol><li>Prepare a licensed corpus with Dataset Studio.</li><li>Review the model configuration and resource estimate.</li><li>Run the notebook manually in Kaggle or Colab.</li><li>Evaluate the checkpoint and export a verified bundle.</li><li>Import a trained model into the desktop runtime after MCT-06.</li></ol><a href="https://github.com/pctaha501-create/MMD-GameForge/tree/feat/mmd-cloud-training-mct-02/cloud/notebooks" target="_blank" rel="noreferrer">Open cloud notebook templates ↗</a></aside></section></div>`;
+}
+function bindAIEvents():void {
+  document.querySelectorAll<HTMLElement>("[data-ai-action]").forEach(node=>node.addEventListener("click",()=>setView(node.dataset.aiAction==="training"?"training":"training")));
+  const profile=document.querySelector<HTMLSelectElement>("#ai-profile");
+  const seed=document.querySelector<HTMLInputElement>("#ai-seed");
+  const estimate=document.querySelector<HTMLDivElement>("#ai-estimate");
+  const update=()=>{
+    if(!profile||!seed||!estimate)return;
+    const key=profile.value as ModelProfile,e=modelEstimate(key),p=modelProfiles[key];
+    estimate.innerHTML=`<div><small>MODEL PARAMETERS</small><b>${e.parameters.toLocaleString()}</b></div><div><small>FP32 WEIGHTS</small><b>${e.weightMiB.toFixed(1)} MiB</b></div><div><small>ADAMW LOWER BOUND</small><b>${e.adamMiB.toFixed(1)} MiB</b></div><p>${p.layers} layers · ${p.hidden} hidden · ${p.heads} attention heads · ${p.seq} context</p>`;
+  };
+  profile?.addEventListener("change",update);seed?.addEventListener("input",update);update();
+  document.querySelector("#ai-download-config")?.addEventListener("click",()=>{
+    const value=Number(seed?.value);if(!Number.isSafeInteger(value)||value<1||value>2147483647){notify("Enter a valid positive integer seed.","error");return;}
+    downloadModelConfig(profile!.value as ModelProfile,value);notify("Model configuration exported. No weights were created.");
+  });
+}
+
 function moduleView(view: Exclude<View, "dashboard" | "projects">): string {
+  if (view === "ai") return aiCoreView();
+  if (view === "training") return trainingView();
   if (["world", "code", "assets", "settings"].includes(view)) return renderProfessional(view as "world" | "code" | "assets" | "settings", activeProject);
   const data = {
     world: ["WORLD BUILDER", "Shape the world.", "A dedicated space for level planning, scene organization, and environment workflows.", "Scene graph and Unreal level tooling will connect here in a later integration phase.", "cube", "WORLD PIPELINE"],
@@ -164,6 +226,7 @@ function bindShellEvents(): void {
   document.querySelector("#search-button")?.addEventListener("click", () => notify("Search will be connected to your project index in a later phase."));
   document.querySelector(".sidebar-collapse")?.addEventListener("click", () => document.querySelector(".app-shell")?.classList.toggle("sidebar-compact"));
   if (["world", "code", "assets", "settings"].includes(currentView)) void bindProfessional(currentView as "world" | "code" | "assets" | "settings", activeProject, notify);
+  if (currentView === "ai" || currentView === "training") bindAIEvents();
 }
 function showCreateModal(): void {
   const root = document.querySelector<HTMLDivElement>("#modal-root")!;
