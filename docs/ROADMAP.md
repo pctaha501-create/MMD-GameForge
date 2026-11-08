@@ -24,16 +24,24 @@ See [MCT_06_LOCAL_INFERENCE.md](./MCT_06_LOCAL_INFERENCE.md).
 
 ## MCT-07 — Instruction training
 
-See [MCT_07_INSTRUCTION_TRAINING.md](./MCT_07_INSTRUCTION_TRAINING.md). Adds prompt/response dataset preparation and response-only supervised training from random initialization, with Kaggle and Colab notebook entrypoints.
+See [MCT_07_INSTRUCTION_TRAINING.md](./MCT_07_INSTRUCTION_TRAINING.md).
 
 ## MCT-08 — Approval-gated tool router
 
-See [MCT_08_SAFE_TOOL_ROUTER.md](./MCT_08_SAFE_TOOL_ROUTER.md). Adds strict JSON tool-call validation and approved project file, scene and Unreal actions. No arbitrary shell execution.
+See [MCT_08_SAFE_TOOL_ROUTER.md](./MCT_08_SAFE_TOOL_ROUTER.md).
 
-## MCT-09 — Task-specific evaluation and multimodal research
+## MCT-09 — Task-specific benchmark runner
 
-Add Unreal/C++ and game-design benchmarks, code compilation checks, project-level integration tests, then separate from-scratch vision, audio and 3D research tracks. Large image/video models are not assumed feasible on free GPU tiers.
+See [MCT_09_TASK_BENCHMARKS.md](./MCT_09_TASK_BENCHMARKS.md). Adds held-out task/language reporting and human-reviewable samples. Keyword-based pass rates are only smoke tests, not production certification.
+
+## MCT-10 — Model quality and Unreal end-to-end acceptance
+
+Build larger curated benchmarks, compile generated Unreal C++ in controlled fixtures, verify project edits in disposable projects, and gate model releases on measured quality, safety and human review.
+
+## Multimodal research
+
+Vision, audio, 3D and video models remain separate from the text AI roadmap and require independently measured, from-scratch experiments. Free GPU availability is not guaranteed.
 
 ## AI Core release gate
 
-The assistant is not complete until task-specific instruction-trained models exist, benchmark targets are met, local inference is stable, safe tool workflows create and validate Unreal project artifacts, and end-to-end Windows acceptance tests pass.
+The assistant is not complete until task-specific models exist, benchmarks pass, local inference is stable, approved tool workflows create valid Unreal project artifacts, and end-to-end Windows acceptance tests pass.

@@ -2,13 +2,13 @@
 
 Cloud-only first-party training for MMD GameForge.
 
-- MCT-01: provider-neutral contracts and provider/security policy.
-- MCT-02: user-started Kaggle/Colab from-scratch Transformer runner.
-- MCT-03: Dataset Studio for normalized, deduplicated, reproducible corpora.
-- MCT-04: model profiles, parameter/memory estimator and experiment registry.
+- MCT-01–02: provider-neutral contracts and user-started cloud Transformer training.
+- MCT-03: Dataset Studio with provenance, deduplication and deterministic splits.
+- MCT-04: Model Factory, memory estimates and experiment registry.
 - MCT-05: held-out evaluation and verified portable bundles.
-- MCT-06: desktop bundle import and authenticated loopback inference bridge.
-- MCT-07: prompt/response instruction dataset and random-init supervised trainer.
-- MCT-08: allowlisted, approval-gated project/scene/Unreal tool router.
+- MCT-06: desktop model import and authenticated local inference.
+- MCT-07: instruction dataset preparation and random-init supervised training.
+- MCT-08: allowlisted, approval-gated project/scene/Unreal tools.
+- MCT-09: task/language benchmark runner with human-reviewable outputs.
 
-No pretrained weights, hosted inference APIs, hidden workers, paid fallback or quota evasion. Free GPU availability is not guaranteed. No tool can execute arbitrary shell commands.
+No pretrained weights, hosted inference APIs, hidden workers, paid fallback or quota evasion. Free GPU availability is not guaranteed. Benchmark smoke scores do not certify production quality.
