@@ -10,5 +10,6 @@ Cloud-only first-party training for MMD GameForge.
 - MCT-07: instruction dataset preparation and random-init supervised training.
 - MCT-08: allowlisted, approval-gated project/scene/Unreal tools.
 - MCT-09: task/language benchmark runner with human-reviewable outputs.
+- MCT-10: metadata-only, document-level dataset rights review; no download or ingestion occurs.
 
-No pretrained weights, hosted inference APIs, hidden workers, paid fallback or quota evasion. Free GPU availability is not guaranteed. Benchmark smoke scores do not certify production quality.
+No pretrained weights, hosted inference APIs, hidden workers, paid fallback or quota evasion. Free GPU availability is not guaranteed. Automated metadata checks do not grant data rights; human review is mandatory. Benchmark smoke scores do not certify production quality.
