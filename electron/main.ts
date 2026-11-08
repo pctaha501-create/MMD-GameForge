@@ -126,7 +126,7 @@ ipcMain.handle("models:start",async(_event,rawId:unknown)=>{
   const token=randomBytes(32).toString("base64url");
   const child=spawn(python.filePaths[0],[script,"--model-dir",model.folder,"--host","127.0.0.1","--port",String(port)],{
     cwd:scriptRoot,windowsHide:true,stdio:["ignore","pipe","pipe"],
-    env:{...process.env,MMD_RUNTIME_TOKEN:token,PYTHONUNBUFFERED:"1"}
+    env:{PATH:process.env.PATH,SYSTEMROOT:process.env.SYSTEMROOT,WINDIR:process.env.WINDIR,TEMP:process.env.TEMP,TMP:process.env.TMP,USERPROFILE:process.env.USERPROFILE,HOME:process.env.HOME,CUDA_VISIBLE_DEVICES:process.env.CUDA_VISIBLE_DEVICES,MMD_RUNTIME_TOKEN:token,PYTHONUNBUFFERED:"1"}
   });
   let stdout="",stderr="",settled=false;
   const result=await new Promise<{running:true;device:string}>((resolve,reject)=>{
