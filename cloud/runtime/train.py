@@ -116,6 +116,10 @@ def main():
 
     from model import build_model
     model = build_model(config).to(device)
+    actual_parameters = sum(parameter.numel() for parameter in model.parameters())
+    if config.get("stage") == "base-test" and not 1_000_000_000 <= actual_parameters < 1_050_000_000:
+        raise RuntimeError(f"Constructed model has {actual_parameters:,} parameters; expected a 1B-class model.")
+    print(f"Constructed model: {actual_parameters:,} parameters ({actual_parameters / 1e9:.3f}B).")
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_cfg["learning_rate"], weight_decay=train_cfg["weight_decay"])
     warmup = max(1, int(train_cfg.get("warmup_steps", 1)))
     def lr_factor(step):
@@ -182,7 +186,7 @@ def main():
         atomic_json(metrics_path, metrics)
         artifacts = [{"path": item.name, "sha256": sha256(item), "size_bytes": item.stat().st_size} for item in (checkpoint, tokenizer_path)]
         manifest = {
-            "schema_version": "mct.checkpoint.v1", "model_family": config["model_family"],
+            "schema_version": "mct.checkpoint.v1", "model_family": config["model_family"], "parameter_count": actual_parameters,
             "architecture_revision": "mmd-transformer-v1",
             "initialization": {"method": "architecture_defined", "seed": seed, "weights_origin": "random_initialization"},
             "training_state": {"global_step": step, "epoch": 0.0, "optimizer_state_included": True, "scheduler_state_included": True},

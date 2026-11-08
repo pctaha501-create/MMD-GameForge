@@ -36,6 +36,14 @@ def main():
     provenance=read_json(root/"provenance.json");validate_provenance(provenance)
     if provenance.get("instruction_dataset",{}).get("schema_version")!="mct.instruction-dataset.v1":raise ValueError("Unsupported instruction dataset schema.")
     rows={name:read_rows(root/f"{name}.jsonl") for name in ("train","validation","test")}
+    allowed_languages=set(config.get("tokenizer",{}).get("languages",[]))
+    observed_languages={row["language"] for split_rows in rows.values() for row in split_rows}
+    if not observed_languages.issubset(allowed_languages):
+        raise ValueError("Instruction dataset contains a language outside the configured model languages.")
+    if config.get("stage")=="base-test" and observed_languages!={"fa","en"}:
+        raise ValueError("MMD Base 1B instruction data must include both Persian (fa) and English (en).")
+    if config.get("stage")=="base-test" and set(provenance.get("languages",[]))!={"fa","en"}:
+        raise ValueError("MMD Base 1B instruction provenance must declare exactly fa and en.")
     for name in rows:
         expected=provenance["instruction_dataset"]["files"].get(name)
         if not expected or sha(root/f"{name}.jsonl")!=expected:raise ValueError(f"{name} instruction split hash does not match provenance.")
@@ -77,6 +85,10 @@ def main():
         return x,labels
     encoded={name:[encode(row) for row in items] for name,items in rows.items()}
     model=build_model(config).to(device)
+    actual_parameters=sum(parameter.numel() for parameter in model.parameters())
+    if config.get("stage")=="base-test" and not 1_000_000_000<=actual_parameters<1_050_000_000:
+        raise RuntimeError(f"Constructed model has {actual_parameters:,} parameters; expected a 1B-class model.")
+    print(f"Constructed model: {actual_parameters:,} parameters ({actual_parameters/1e9:.3f}B).")
     optimizer=torch.optim.AdamW(model.parameters(),lr=train_cfg["learning_rate"],weight_decay=train_cfg["weight_decay"])
     warmup=max(1,int(train_cfg.get("warmup_steps",1)))
     def lr_factor(step):
@@ -114,7 +126,7 @@ def main():
             "global_step":step,"config_sha256":config_hash,"dataset_revision":provenance["revision"],"tokenizer_sha256":sha(tokenizer_path),"seed":seed},temp)
         os.replace(temp,checkpoint)
         artifacts=[{"path":p.name,"sha256":sha(p),"size_bytes":p.stat().st_size} for p in (checkpoint,tokenizer_path)]
-        manifest={"schema_version":"mct.checkpoint.v1","model_family":config["model_family"],"architecture_revision":"mmd-transformer-v1",
+        manifest={"schema_version":"mct.checkpoint.v1","model_family":config["model_family"],"parameter_count":actual_parameters,"architecture_revision":"mmd-transformer-v1",
             "initialization":{"method":"architecture_defined","seed":seed,"weights_origin":"random_initialization"},
             "training_state":{"global_step":step,"epoch":0.0,"optimizer_state_included":True,"scheduler_state_included":True},
             "lineage":{"source_commit":args.source_commit if len(args.source_commit)>=7 else "local-unpinned","config_sha256":config_hash,
