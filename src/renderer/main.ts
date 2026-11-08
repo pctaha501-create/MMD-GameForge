@@ -1,7 +1,7 @@
 import "./styles.css";
 import type { ProjectSummary } from "../shared/types.js";
 import { renderProfessional, bindProfessional } from "./professional.js";
-import aiToolCallRules = require("../shared/ai-tool-call.cjs");
+import { validateAIToolCall } from "../shared/ai-tool-call.mjs";
 
 type View = "dashboard" | "projects" | "world" | "code" | "assets" | "ai" | "training" | "settings";
 const icons: Record<string, string> = {
@@ -188,7 +188,7 @@ function parseAIToolCall(output:string):unknown {
 }
 function renderAIToolProposal(output:string):void {
   const root=document.querySelector<HTMLDivElement>("#ai-tool-proposal");if(!root)return;
-  const parsed=parseAIToolCall(output);const result=aiToolCallRules.validateAIToolCall(parsed);
+  const parsed=parseAIToolCall(output);const result=validateAIToolCall(parsed);
   if(!result.ok){root.hidden=true;root.innerHTML="";return;}
   const labels:Record<string,string>={"project.list_files":"List project files","project.read_file":"Read project file","project.write_file":"Overwrite project file","project.create_file":"Create project file","scene.save":"Save scene","unreal.detect":"Detect Unreal Engine","unreal.launch":"Launch Unreal Editor"};
   root.hidden=false;
