@@ -18,14 +18,22 @@ See [MCT_04_MODEL_FACTORY.md](./MCT_04_MODEL_FACTORY.md).
 
 See [MCT_05_EVALUATION_AND_BUNDLES.md](./MCT_05_EVALUATION_AND_BUNDLES.md).
 
-## MCT-06 — Local inference runtime
+## MCT-06 — Desktop local inference
 
-See [MCT_06_LOCAL_INFERENCE.md](./MCT_06_LOCAL_INFERENCE.md). Adds bundle-verified, loopback-only inference with bearer-token authentication and bounded generation requests. Desktop process lifecycle integration remains in progress.
+See [MCT_06_LOCAL_INFERENCE.md](./MCT_06_LOCAL_INFERENCE.md).
 
-## AI Core completion
+## MCT-07 — Instruction training and safe tool-use data
 
-The desktop AI screens now create model configs and import hash-verified model bundles. They do not yet launch inference. Full completion requires the desktop runtime bridge, real trained artifacts, domain-specific benchmarks, reliable task workflows, Unreal integration and end-to-end acceptance tests.
+See [MCT_07_INSTRUCTION_TRAINING.md](./MCT_07_INSTRUCTION_TRAINING.md). Adds a prompt/response dataset pipeline, deterministic splits, and supervised response-only training from random initialization. Generated tool calls are not executed without a separate allowlisted approval layer.
 
-## Phase 03 — 3D Scene Editor
+## MCT-08 — Task-specific AI orchestration
 
-See [PHASE_03_SCENE_EDITOR.md](./PHASE_03_SCENE_EDITOR.md).
+Build the schema-validated tool router, project-aware context retrieval, code/design task workflows, approval gates and task-specific benchmark suites.
+
+## MCT-09 — Multimodal model research
+
+Evaluate from-scratch vision, audio and 3D model architectures separately. Do not promise free-tier training of large diffusion/video models; require small measured experiments and real dataset licensing first.
+
+## AI Core release gate
+
+The assistant is not complete until task-specific instruction-trained models exist, benchmark targets are met, local inference is stable, safe tool workflows can create and validate Unreal project artifacts, and end-to-end Windows acceptance tests pass.
