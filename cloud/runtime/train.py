@@ -236,10 +236,23 @@ def main():
             print("Runtime budget reached; checkpointing and stopping cleanly.")
             save(global_step, last_val)
             break
-    test_loss = evaluate(test_ids)
-    atomic_json(metrics_path, {"global_step": global_step, "validation_loss": last_val, "test_loss": test_loss, "elapsed_seconds": round(time.monotonic()-began, 2), "device": str(device)})
-    save(global_step, last_val, "passed" if math.isfinite(test_loss) else "failed")
-    print(f"Finished. test_loss={test_loss:.4f}; artifacts: {out}")
+    training_complete = global_step >= max_steps
+    test_loss = evaluate(test_ids) if training_complete else None
+    evaluation_status = ("passed" if test_loss is not None and math.isfinite(test_loss)
+                         else "failed" if training_complete else "incomplete")
+    # Persist the checkpoint manifest first; then write the final metrics so the
+    # save helper cannot overwrite test results with its checkpoint-only metrics.
+    save(global_step, last_val, evaluation_status)
+    atomic_json(metrics_path, {
+        "global_step": global_step, "max_steps": max_steps,
+        "training_complete": training_complete, "evaluation_status": evaluation_status,
+        "validation_loss": last_val, "test_loss": test_loss,
+        "elapsed_seconds": round(time.monotonic()-began, 2), "device": str(device)
+    })
+    if training_complete:
+        print(f"Training complete. test_loss={test_loss:.4f}; artifacts: {out}")
+    else:
+        print(f"Training paused at step {global_step}/{max_steps}; checkpoint saved for resume. Artifacts: {out}")
 
 if __name__ == "__main__":
     main()
