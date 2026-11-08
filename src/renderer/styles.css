@@ -52,3 +52,10 @@
 .ai-imported-row small,.ai-empty-models{font-size:11px;color:var(--muted,#9299aa)}
 .ai-imported-row>strong{font-size:12px;font-variant-numeric:tabular-nums}
 @media(max-width:900px){.ai-imported-row{align-items:flex-start;flex-direction:column}}
+
+.ai-chat{display:flex;flex-direction:column;gap:12px;padding:18px;border:1px solid var(--line,rgba(255,255,255,.09));border-radius:13px;background:rgba(255,255,255,.02)}
+.ai-chat h3{margin:5px 0;font-size:16px}
+.ai-chat select,.ai-chat textarea{width:100%;padding:12px;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:9px;background:#111722;color:inherit;font:inherit;resize:vertical}
+.ai-chat-actions{display:flex;align-items:center;gap:14px}
+.ai-chat-actions span{font-size:11px;color:var(--muted,#9299aa)}
+.ai-chat pre{white-space:pre-wrap;overflow-wrap:anywhere;min-height:100px;max-height:360px;overflow:auto;padding:14px;border-radius:10px;background:#080d15;color:#dce4f3;font:12px/1.7 ui-monospace,monospace}
