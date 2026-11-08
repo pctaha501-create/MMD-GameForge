@@ -1,5 +1,6 @@
 """Dependency-free validation helpers for MMD Cloud Training jobs."""
 from __future__ import annotations
+import hashlib
 import json
 from pathlib import Path
 
