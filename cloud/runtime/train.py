@@ -123,7 +123,7 @@ def main():
     start_step = 0
     resume = train_cfg.get("resume_from_checkpoint", True) if args.resume is None else args.resume
     if resume and checkpoint.exists():
-        state = torch.load(checkpoint, map_location=device, weights_only=False)
+        state = torch.load(checkpoint, map_location=device, weights_only=True)
         if state.get("config_sha256") != config_hash or state.get("dataset_revision") != provenance["revision"]:
             raise ValueError("Checkpoint config or dataset revision does not match this run.")
         if state.get("tokenizer_sha256") != sha256(tokenizer_path):

@@ -50,7 +50,7 @@ def load_documents(path: Path) -> tuple[list[dict], dict]:
 def split_documents(documents: list[dict], seed: int) -> dict[str, list[dict]]:
     if len(documents) < 3:
         raise ValueError("At least three unique non-empty documents are required to create train/validation/test splits.")
-    ordered = sorted(documents, key=lambda item: stable_key(seed, item["text"]))
+    ordered = sorted(documents, key=lambda item: stable_key(seed, item["text"], item["language"]))
     n = len(ordered)
     test_count = max(1, round(n * 0.05))
     validation_count = max(1, round(n * 0.05))
@@ -76,7 +76,7 @@ def prepare(args: argparse.Namespace) -> dict:
             "documents": len(records), "characters": len(part),
             "corpus_start": start, "corpus_end": end,
             "language_counts": dict(sorted(Counter(doc["language"] for doc in records).items())),
-            "document_ids": [stable_key(args.seed, doc["text"])[:16] for doc in records],
+            "document_ids": [stable_key(args.seed, doc["text"], doc["language"])[:16] for doc in records],
         }
         cursor = end + 2
     corpus = "\n\n".join(corpus_parts).strip() + "\n"

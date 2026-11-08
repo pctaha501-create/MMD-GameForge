@@ -25,7 +25,7 @@ def main():
     job=validate_job(args.config,args.dataset,args.provenance)
     config=job["config"]; provenance=read_json(args.provenance)
     config_path, dataset_path, checkpoint_path, tokenizer_path=map(Path,(args.config,args.dataset,args.checkpoint,args.tokenizer))
-    state=torch.load(checkpoint_path,map_location="cpu",weights_only=False)
+    state=torch.load(checkpoint_path,map_location="cpu",weights_only=True)
     config_hash=sha256(config_path)
     if state.get("config_sha256")!=config_hash: raise ValueError("Checkpoint config hash does not match.")
     if state.get("dataset_revision")!=provenance["revision"]: raise ValueError("Checkpoint dataset revision does not match.")
