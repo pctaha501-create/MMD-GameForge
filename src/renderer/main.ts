@@ -178,7 +178,12 @@ function trainingView():string {
 }
 
 function parseAIToolCall(output:string):unknown {
-  const trimmed=output.trim().replace(/^\`\`\`(?:json)?\\s*/i,"").replace(/\\s*\`\`\`$/,"");
+  let trimmed=output.trim();
+  if(trimmed.startsWith("```")){
+    const newline=trimmed.indexOf("\n");
+    if(newline>=0)trimmed=trimmed.slice(newline+1);
+    if(trimmed.endsWith("```"))trimmed=trimmed.slice(0,-3).trim();
+  }
   try{return JSON.parse(trimmed) as unknown;}catch{return null;}
 }
 function renderAIToolProposal(output:string):void {
