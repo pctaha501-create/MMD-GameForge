@@ -43,3 +43,12 @@
 .ai-workshop-side ol{padding-left:20px;color:var(--muted,#9299aa);font-size:12px;line-height:2}
 .ai-workshop-side a{display:inline-block;margin-top:12px;color:#b7a3ff;font-size:12px}
 @media(max-width:900px){.ai-model-grid,.ai-workshop{grid-template-columns:1fr}.ai-pipeline{align-items:flex-start;flex-direction:column}}
+
+.ai-installed{padding:20px}
+.ai-installed h2{margin:5px 0 0;font-size:19px}
+.ai-imported-list{display:flex;flex-direction:column;gap:10px;margin:16px 0}
+.ai-imported-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;border:1px solid var(--line,rgba(255,255,255,.09));border-radius:11px}
+.ai-imported-row>div{display:flex;flex-direction:column;gap:5px}
+.ai-imported-row small,.ai-empty-models{font-size:11px;color:var(--muted,#9299aa)}
+.ai-imported-row>strong{font-size:12px;font-variant-numeric:tabular-nums}
+@media(max-width:900px){.ai-imported-row{align-items:flex-start;flex-direction:column}}
