@@ -89,7 +89,16 @@ def main():
     if config.get("stage")=="base-test" and not 1_000_000_000<=actual_parameters<1_050_000_000:
         raise RuntimeError(f"Constructed model has {actual_parameters:,} parameters; expected a 1B-class model.")
     print(f"Constructed model: {actual_parameters:,} parameters ({actual_parameters/1e9:.3f}B).")
-    optimizer=torch.optim.AdamW(model.parameters(),lr=train_cfg["learning_rate"],weight_decay=train_cfg["weight_decay"])
+    if train_cfg.get("optimizer")=="adamw_8bit":
+        try:
+            import bitsandbytes as bnb
+        except ImportError as exc:
+            raise RuntimeError("This profile uses 8-bit AdamW. Install bitsandbytes in the cloud notebook before training.") from exc
+        optimizer=bnb.optim.AdamW8bit(model.parameters(),lr=train_cfg["learning_rate"],weight_decay=train_cfg["weight_decay"])
+    elif train_cfg.get("optimizer")=="adamw":
+        optimizer=torch.optim.AdamW(model.parameters(),lr=train_cfg["learning_rate"],weight_decay=train_cfg["weight_decay"])
+    else:
+        raise ValueError(f"Unsupported optimizer: {train_cfg.get('optimizer')!r}")
     warmup=max(1,int(train_cfg.get("warmup_steps",1)))
     def lr_factor(step):
         if step<warmup:return (step+1)/warmup
