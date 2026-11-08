@@ -138,7 +138,7 @@ ipcMain.handle("models:import-folder", async () => {
   };
   if (checkpointManifest.initialization?.weights_origin !== "random_initialization") throw new Error("Checkpoint lineage does not confirm random initialization.");
   if (checkpointManifest.lineage?.config_sha256 !== manifest.lineage?.config_sha256 || checkpointManifest.lineage?.dataset_revision !== manifest.lineage?.dataset_revision) throw new Error("Bundle and checkpoint lineage do not match.");
-  const configArtifact = manifest.files.find(item => item.path !== "evaluation.json" && item.path.endsWith(".json") && item.path !== "checkpoint-manifest.json" && item.path !== "tokenizer.json");
+  const configArtifact = manifest.files.find(item => item.sha256 === manifest.lineage?.config_sha256);
   if (!configArtifact || configArtifact.sha256 !== manifest.lineage?.config_sha256) throw new Error("Bundle config hash does not match checkpoint lineage.");
   const checkpointArtifacts = new Map((checkpointManifest as { artifacts?: { path:string; sha256:string }[] }).artifacts?.map(item => [item.path,item.sha256]) ?? []);
   for (const name of ["checkpoint.pt","tokenizer.json"]) {
