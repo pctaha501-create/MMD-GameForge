@@ -53,6 +53,14 @@ class DatasetStudioTests(unittest.TestCase):
             self.assertTrue((out / "corpus.txt").exists())
             provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
             self.assertEqual(set(provenance["splits"]), {"train", "validation", "test"})
+            details = provenance["dataset_studio"]["split_details"]
+            corpus = (out / "corpus.txt").read_text(encoding="utf-8")
+            for name in ("train", "validation", "test"):
+                start, end = details[name]["corpus_start"], details[name]["corpus_end"]
+                self.assertGreater(end, start)
+                self.assertLessEqual(end, len(corpus))
+            self.assertLessEqual(details["train"]["corpus_end"], details["validation"]["corpus_start"])
+            self.assertLessEqual(details["validation"]["corpus_end"], details["test"]["corpus_start"])
             self.assertEqual(provenance["dataset_studio"]["unique_documents"], 40)
             self.assertIn("fa", report["language_counts"])
             self.assertTrue((out / "report.json").exists())

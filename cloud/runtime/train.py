@@ -66,8 +66,16 @@ def main():
 
     text = Path(args.dataset).read_text(encoding="utf-8")
     n = len(text)
-    train_end, val_end = int(n * 0.90), int(n * 0.95)
-    train_text, val_text, test_text = text[:train_end], text[train_end:val_end], text[val_end:]
+    split_details = provenance = read_json(args.provenance)
+    studio = provenance.get("dataset_studio", {})
+    offsets = studio.get("split_details", {})
+    if all(name in offsets for name in ("train", "validation", "test")):
+        train_text = text[offsets["train"]["corpus_start"]:offsets["train"]["corpus_end"]]
+        val_text = text[offsets["validation"]["corpus_start"]:offsets["validation"]["corpus_end"]]
+        test_text = text[offsets["test"]["corpus_start"]:offsets["test"]["corpus_end"]]
+    else:
+        train_end, val_end = int(n * 0.90), int(n * 0.95)
+        train_text, val_text, test_text = text[:train_end], text[train_end:val_end], text[val_end:]
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     tokenizer_path = out / "tokenizer.json"
@@ -139,7 +147,6 @@ def main():
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp and amp_dtype == torch.float16)
     loss_fn = nn.CrossEntropyLoss()
     config_hash = sha256(Path(args.config))
-    provenance = read_json(args.provenance)
     checkpoint = out / "checkpoint.pt"
     manifest_path, metrics_path = out / "checkpoint-manifest.json", out / "metrics.json"
     start_step = 0
