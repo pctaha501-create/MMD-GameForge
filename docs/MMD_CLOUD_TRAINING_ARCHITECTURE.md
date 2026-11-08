@@ -83,3 +83,8 @@ Never commit API keys, Kaggle credentials, Hugging Face tokens, OAuth tokens, co
 ## Cost and availability guarantee
 
 The project targets zero user spend. It cannot guarantee continuous GPU availability, unlimited free storage, a fixed accelerator, or a fixed quota. If no compliant free accelerator is available, the job remains queued/paused; it must not silently switch to a paid resource.
+
+
+## Bilingual MMD Base 1B test target
+
+The current test target is defined in `cloud/configs/mmd-base-1b-bilingual.json`: 1,022,871,552 estimated parameters, Persian and English only, random initialization, and a tokenizer trained from the supplied licensed corpus. The runtime rejects datasets whose provenance contains languages outside the configured pair and requires both languages for this test profile. A 24 GiB CUDA preflight is enforced; it does not guarantee that any particular free provider session will fit or be available. The developer laptop is not used for training.

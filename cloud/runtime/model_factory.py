@@ -17,7 +17,7 @@ BASE = {
     "tokenizer": {
         "type": "byte_level_bpe", "training_from_scratch": True,
         "target_vocab_size": 8000, "normalization": "unicode_nfc",
-        "languages": ["fa", "en", "de", "fr", "es", "ar", "zh", "hi"]
+        "languages": ["fa", "en"]
     },
     "initialization": {"weights": "random", "method": "architecture_defined", "seed": 20261108},
     "training": {
@@ -42,6 +42,8 @@ PROFILES = {
     "code-tiny": ("MMD-Code-Tiny", 12000, 256, 192, 3, 6, 800),
     "game-design-tiny": ("MMD-GameDesign-Tiny", 12000, 256, 192, 3, 6, 800),
     "game-agent-tiny": ("MMD-Game-Agent-Tiny", 12000, 512, 192, 4, 6, 1000),
+    # ~1.023B parameters with tied embeddings; designed for a 24 GiB+ cloud GPU.
+    "bilingual-base-1b": ("MMD-Base-1B-Bilingual", 32000, 256, 2048, 19, 16, 1000),
 }
 
 def estimate_parameters(config: dict) -> dict:
@@ -79,6 +81,14 @@ def create_config(profile: str, seed: int | None = None) -> dict:
                                   num_layers=layers, num_attention_heads=heads)
     config["tokenizer"]["target_vocab_size"] = vocab
     config["training"]["max_steps"] = steps
+    if profile == "bilingual-base-1b":
+        config["stage"] = "base-test"
+        config["description"] = "Approximately 1.023B-parameter Persian/English decoder-only Transformer; random initialization only. Requires a compatible cloud GPU and is a test baseline, not a trained model."
+        config["training"].update(micro_batch_size=1, gradient_accumulation_steps=16,
+                                  precision="auto", checkpoint_interval_steps=25,
+                                  evaluation_interval_steps=50)
+        config["resource_policy"].update(require_cuda=True, minimum_gpu_memory_gib=24,
+                                         hardware_note="AdamW state lower bound is about 15.25 GiB before activations and runtime overhead; 24 GiB is a minimum preflight, not a fit guarantee.")
     config["training"]["checkpoint_interval_steps"] = min(100, max(10, steps // 10))
     config["training"]["evaluation_interval_steps"] = config["training"]["checkpoint_interval_steps"]
     if seed is not None:

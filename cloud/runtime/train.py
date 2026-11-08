@@ -57,7 +57,19 @@ def main():
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    resource_policy = config.get("resource_policy", {})
+    if resource_policy.get("require_cuda") and not torch.cuda.is_available():
+        raise RuntimeError("This MMD Base configuration requires a cloud CUDA GPU; CPU training is disabled.")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type == "cuda":
+        required_gib = float(resource_policy.get("minimum_gpu_memory_gib", 0))
+        available_gib = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        if required_gib and available_gib < required_gib:
+            raise RuntimeError(
+                f"Insufficient GPU memory for this configuration: {available_gib:.2f} GiB available; "
+                f"at least {required_gib:.0f} GiB is required by the preflight policy. "
+                "Choose a compliant larger free GPU; no CPU or paid fallback is allowed."
+            )
     if device.type == "cuda":
         torch.backends.cuda.matmul.allow_tf32 = True
     print(f"Runtime: {device}; accelerator: {torch.cuda.get_device_name(0) if device.type == 'cuda' else 'CPU'}")

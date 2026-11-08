@@ -21,3 +21,10 @@ python cloud/runtime/experiment_registry.py --db mmd-experiments.sqlite3 list
 ```
 
 SQLite stores config hash, dataset revision, source commit, status, metrics and artifact SHA-256 hashes. It does not mark a model production-ready. Release promotion requires a separate benchmark and safety review; no automatic promotion is implemented.
+
+
+## Bilingual MMD Base 1B test profile
+
+The `bilingual-base-1b` profile defines a decoder-only Transformer with a 32,000-token byte-level BPE vocabulary, 256-token context, hidden size 2,048, 19 layers, 16 attention heads, 4x feed-forward width, and tied token embeddings. The estimator returns **1,022,871,552 parameters** for this exact architecture. Tokenizer training and model weights both start from scratch. Supported languages are Persian (`fa`) and English (`en`) only.
+
+The AdamW state lower bound is approximately 15.25 GiB before activations, CUDA workspaces, and framework overhead. The trainer therefore refuses CPU execution and requires a cloud CUDA GPU reporting at least 24 GiB. This is a conservative preflight, not a guarantee of fit or free GPU availability. The model is only a configured test target until it has actually been trained and evaluated.

@@ -44,7 +44,15 @@ def main():
     if max_steps<1:raise ValueError("max_steps must be positive.")
     seed=int(config["initialization"]["seed"]);random.seed(seed);torch.manual_seed(seed)
     if torch.cuda.is_available():torch.cuda.manual_seed_all(seed)
+    resource_policy=config.get("resource_policy",{})
+    if resource_policy.get("require_cuda") and not torch.cuda.is_available():
+        raise RuntimeError("This MMD Base configuration requires a cloud CUDA GPU; CPU training is disabled.")
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type=="cuda":
+        required_gib=float(resource_policy.get("minimum_gpu_memory_gib",0))
+        available_gib=torch.cuda.get_device_properties(0).total_memory/1024**3
+        if required_gib and available_gib<required_gib:
+            raise RuntimeError(f"Insufficient GPU memory: {available_gib:.2f} GiB available; at least {required_gib:.0f} GiB required by preflight. No CPU or paid fallback is allowed.")
     tokenizer_path=out/"tokenizer.json";tokenizer=ByteLevelBPETokenizer()
     def formatted(row):return "<|user|>\n"+row["prompt"]+"\n<|assistant|>\n"+row["response"]+" <|endoftext|>"
     tokenizer.train_from_iterator((formatted(row) for row in rows["train"]),vocab_size=int(config["tokenizer"]["target_vocab_size"]),min_frequency=2,special_tokens=["<|user|>","<|assistant|>","<|endoftext|>"])

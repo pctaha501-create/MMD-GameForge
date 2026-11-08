@@ -25,6 +25,16 @@ def validate_config(config: dict) -> None:
             raise ValueError(f"architecture.{key} must be a positive integer.")
     if arch["hidden_size"] % arch["num_attention_heads"]:
         raise ValueError("hidden_size must be divisible by num_attention_heads.")
+    languages = config.get("tokenizer", {}).get("languages", [])
+    if not isinstance(languages, list) or not languages or any(x not in ("fa", "en") for x in languages):
+        raise ValueError("This MMD Base release accepts only Persian (fa) and English (en).")
+    if config.get("stage") == "base-test" and set(languages) != {"fa", "en"}:
+        raise ValueError("The bilingual MMD Base test config must declare exactly fa and en.")
+    if config.get("stage") == "base-test":
+        if config.get("resource_policy", {}).get("require_cuda") is not True:
+            raise ValueError("The 1B Base model must train on cloud CUDA; CPU fallback is disabled.")
+        if float(config.get("resource_policy", {}).get("minimum_gpu_memory_gib", 0)) < 24:
+            raise ValueError("The 1B Base model requires a declared 24 GiB GPU preflight minimum.")
     train = config.get("training", {})
     for key in ("max_steps", "micro_batch_size", "gradient_accumulation_steps", "checkpoint_interval_steps"):
         if not isinstance(train.get(key), int) or train[key] < 1:
@@ -54,4 +64,10 @@ def validate_job(config_path: str | Path, dataset_path: str | Path, provenance_p
     config = read_json(config_path)
     validate_config(config)
     raw, provenance = validate_dataset(dataset_path, provenance_path)
+    allowed = set(config.get("tokenizer", {}).get("languages", []))
+    supplied = set(provenance["languages"])
+    if not supplied.issubset(allowed):
+        raise ValueError("Dataset provenance contains languages outside the model's configured language set.")
+    if config.get("stage") == "base-test" and supplied != {"fa", "en"}:
+        raise ValueError("MMD Base 1B test data must include both Persian (fa) and English (en).")
     return {"config": config, "dataset_characters": len(raw), "dataset_revision": provenance["revision"]}

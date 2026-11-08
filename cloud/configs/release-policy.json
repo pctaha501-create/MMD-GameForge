@@ -13,13 +13,7 @@
   ],
   "required_by_language": [
     "fa",
-    "en",
-    "de",
-    "fr",
-    "es",
-    "ar",
-    "zh",
-    "hi"
+    "en"
   ],
-  "note": "Initial conservative research policy; thresholds require project-owner review and do not certify production readiness."
+  "note": "Initial conservative research policy for the bilingual Persian/English Base model; thresholds require project-owner review and do not certify production readiness."
 }
