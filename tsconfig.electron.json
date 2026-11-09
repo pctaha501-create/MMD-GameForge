@@ -5,10 +5,17 @@
     "moduleResolution": "NodeNext",
     "outDir": "dist",
     "rootDir": ".",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "sourceMap": true,
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["electron/**/*.ts", "src/shared/types.ts", "src/shared/project-name.cjs"]
+  "include": [
+    "electron/**/*.ts",
+    "src/shared/types.ts",
+    "src/shared/project-name.cjs",
+    "electron/**/*.cjs"
+  ]
 }
