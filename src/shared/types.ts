@@ -37,7 +37,7 @@ export interface DesktopAPI {
   detectUnreal(projectPath: string): Promise<UnrealStatus>;
   launchUnreal(projectFile: string, editorPath?: string): Promise<boolean>;
   getAiStatus(): Promise<AiStatus>;
-  importAiDataset(): Promise<AiDatasetInfo | null>;
+  importAiDataset(provenance?: AiDatasetProvenanceInput): Promise<AiDatasetInfo | null>;
   listAiDatasets(): Promise<AiDatasetInfo[]>;
   trainAiModel(datasetId: string, modelName: string): Promise<AiModelInfo>;
   listAiModels(): Promise<AiModelInfo[]>;
@@ -54,6 +54,8 @@ export interface ProjectFileNode { name: string; path: string; kind: "file" | "f
 export interface UnrealStatus { installed: boolean; editorPath: string | null; projectFile: string | null; }
 export interface StudioSettings { editorFontSize?: number; wordWrap?: boolean; confirmExternal?: boolean; unrealEditorPath?: string; }
 
-export interface AiDatasetInfo { id: string; name: string; bytes: number; characters: number; createdAt: string; }
-export interface AiModelInfo { id: string; name: string; datasetName: string; createdAt: string; trainedCharacters: number; vocabularySize: number; hiddenSize: number; architecture: string; initialization: string; seed: number; epochs: number; learningRate: number; trainingLoss: number; kind: string; }
+export interface AiDatasetProvenanceInput { sourceReference?: string; license?: string; attribution?: string; notes?: string; }
+export interface AiDatasetProvenance { schemaVersion: number; sourceType: string; originalFileName: string; importedAt: string; encoding: string; normalization: string; sourceReference: string; license: string; attribution: string; notes: string; sourceSha256: string; contentSha256: string; }
+export interface AiDatasetInfo { id: string; name: string; bytes: number; characters: number; createdAt: string; provenance: AiDatasetProvenance; }
+export interface AiModelInfo { id: string; name: string; datasetName: string; datasetSha256: string; datasetLicense: string; datasetSourceReference: string; createdAt: string; trainedCharacters: number; vocabularySize: number; hiddenSize: number; architecture: string; initialization: string; seed: number; epochs: number; learningRate: number; trainingLoss: number; kind: string; }
 export interface AiStatus { runtime: string; mode: "offline"; datasets: number; models: number; storagePath: string; modelKind: string; limitations: string[]; }

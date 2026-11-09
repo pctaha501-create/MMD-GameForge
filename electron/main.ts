@@ -4,11 +4,11 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import projectNameRules = require("../src/shared/project-name.cjs");
-import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings } from "../src/shared/types.js";
+import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings, AiDatasetProvenanceInput } from "../src/shared/types.js";
 
 const { validateProjectName } = projectNameRules;
 const isDevelopment = !app.isPackaged;
-const { AiCore } = require("./ai-core.cjs") as { AiCore: new (storagePath: string) => { initialize(): Promise<void>; status(): Promise<unknown>; importDataset(path: string): Promise<unknown>; listDatasets(): Promise<unknown>; train(id: string, name: string): Promise<unknown>; listModels(): Promise<unknown>; generate(id: string, prompt: string, length: number): Promise<string> } };
+const { AiCore } = require("./ai-core.cjs") as { AiCore: new (storagePath: string) => { initialize(): Promise<void>; status(): Promise<unknown>; importDataset(path: string, provenance?: AiDatasetProvenanceInput): Promise<unknown>; listDatasets(): Promise<unknown>; train(id: string, name: string): Promise<unknown>; listModels(): Promise<unknown>; generate(id: string, prompt: string, length: number): Promise<string> } };
 const aiCore = new AiCore(path.join(app.getPath("userData"), "ai-core"));
 let mainWindow: BrowserWindow | null = null;
 
@@ -215,10 +215,10 @@ ipcMain.handle("project:reveal", async (_event, projectPath: unknown, relativePa
   else shell.showItemInFolder(await realpath(projectPath)); return true;
 });
 ipcMain.handle("ai:status", () => aiCore.status());
-ipcMain.handle("ai:dataset:import", async () => {
+ipcMain.handle("ai:dataset:import", async (_event, provenance?: AiDatasetProvenanceInput) => {
   const selected = await dialog.showOpenDialog({ title: "Import a UTF-8 training corpus", properties: ["openFile"], filters: [{ name: "Text datasets", extensions: ["txt"] }] });
   if (selected.canceled || !selected.filePaths[0]) return null;
-  return aiCore.importDataset(selected.filePaths[0]);
+  return aiCore.importDataset(selected.filePaths[0], provenance);
 });
 ipcMain.handle("ai:datasets:list", () => aiCore.listDatasets());
 ipcMain.handle("ai:model:train", (_event, datasetId: unknown, modelName: unknown) => {

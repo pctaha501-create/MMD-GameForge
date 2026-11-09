@@ -13,6 +13,8 @@ This milestone connects the Model Workshop UI to a real offline neural training 
 
 - Electron's main process owns filesystem access; the renderer uses a narrow typed IPC bridge.
 - A user explicitly selects a UTF-8 `.txt` corpus. Files are limited to 2 MB and stored locally under the application user-data directory in `ai-core/datasets`.
+- Each dataset record stores its original filename, import time, optional source reference, declared license, attribution, notes, encoding/normalization policy, raw-file SHA-256, and normalized-text SHA-256. Unknown licenses remain explicitly marked `not-declared`.
+- Training verifies the normalized-text hash before using a dataset and copies its hash and provenance summary into the model checkpoint, binding the checkpoint to the exact imported corpus.
 - Model checkpoints are saved atomically as JSON under `ai-core/models`.
 - Generation loads a checkpoint and predicts up to 500 new characters locally.
 - No pretrained weights, cloud API, external model service, or network connection is used.
@@ -23,4 +25,4 @@ This is a tiny character-level research model, not a general-purpose assistant, 
 
 ## Verification
 
-`tests/ai-core.test.cjs` covers dataset import, random initialization metadata, training, checkpoint persistence, local generation, invalid IDs, undersized corpora, and helper behavior. Run `npm test`.
+`tests/ai-core.test.cjs` covers dataset import and provenance hashes, provenance validation, tamper detection, random initialization metadata, training, checkpoint lineage/persistence, local generation, invalid IDs, undersized corpora, and helper behavior. Run `npm test`.
