@@ -7,6 +7,9 @@ const MAX_TRAINING_CHARS = 20_000;
 const MAX_VOCABULARY = 128;
 const HIDDEN_SIZE = 24;
 const LEARNING_RATE = 0.06;
+const DEFAULT_TRAINING_CHUNK_STEPS = 1024;
+const MAX_TRAINING_CHUNK_STEPS = 4096;
+const MAX_TRAINING_EPOCHS = 10;
 const idPattern = /^[a-f0-9-]{36}$/i;
 
 function safeName(value) {
@@ -31,6 +34,12 @@ function sample(probabilities, random = Math.random) {
   let value = random();
   for (let i = 0; i < probabilities.length; i++) { value -= probabilities[i]; if (value <= 0) return i; }
   return probabilities.length - 1;
+}
+function shuffledIndices(length, seed) {
+  const random = seededRandom(seed);
+  const indices = Array.from({ length }, (_, index) => index);
+  for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]]; }
+  return indices;
 }
 
 class AiCore {
@@ -96,8 +105,20 @@ class AiCore {
     }
     return out.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   }
-  async train(datasetId, modelName) {
+  normalizeTrainingOptions(input = {}, allowEpochs = false) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Invalid training options.");
+    const maxSteps = input.maxSteps === undefined ? DEFAULT_TRAINING_CHUNK_STEPS : input.maxSteps;
+    if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > MAX_TRAINING_CHUNK_STEPS) throw new Error(`Training chunks must contain 1–${MAX_TRAINING_CHUNK_STEPS} steps.`);
+    let epochs = 1;
+    if (allowEpochs) {
+      epochs = input.epochs === undefined ? 1 : input.epochs;
+      if (!Number.isInteger(epochs) || epochs < 1 || epochs > MAX_TRAINING_EPOCHS) throw new Error(`Training epochs must be between 1 and ${MAX_TRAINING_EPOCHS}.`);
+    }
+    return { maxSteps, epochs };
+  }
+  async train(datasetId, modelName, options = {}) {
     if (typeof datasetId !== "string" || !idPattern.test(datasetId)) throw new Error("Invalid dataset identifier.");
+    const trainingOptions = this.normalizeTrainingOptions(options, true);
     const dataset = JSON.parse(await fs.readFile(path.join(this.datasetsPath, datasetId + ".json"), "utf8"));
     if (!dataset || typeof dataset.text !== "string") throw new Error("Dataset record is invalid.");
     const datasetSha256 = createHash("sha256").update(dataset.text, "utf8").digest("hex");
@@ -108,32 +129,89 @@ class AiCore {
     const vocabulary = [...new Set(chars)];
     if (vocabulary.length > MAX_VOCABULARY) throw new Error(`Dataset has ${vocabulary.length} unique characters; this CPU model supports at most ${MAX_VOCABULARY}.`);
     const index = new Map(vocabulary.map((char, i) => [char, i]));
-    const seed = randomBytes(4).readUInt32LE(0) || 1; const random = seededRandom(seed);
+    const seed = randomBytes(4).readUInt32LE(0) || 1;
+    const random = seededRandom(seed);
     const v = vocabulary.length; const hSize = HIDDEN_SIZE;
     const inputWeights = new Float64Array(v * hSize); const outputWeights = new Float64Array(hSize * v);
     const hiddenBias = new Float64Array(hSize); const outputBias = new Float64Array(v);
     const inputLimit = Math.sqrt(6 / (v + hSize)); const outputLimit = Math.sqrt(6 / (hSize + v));
     for (let i = 0; i < inputWeights.length; i++) inputWeights[i] = (random() * 2 - 1) * inputLimit;
     for (let i = 0; i < outputWeights.length; i++) outputWeights[i] = (random() * 2 - 1) * outputLimit;
-    const samples = [];
-    for (let i = 0; i + 1 < chars.length; i++) samples.push([index.get(chars[i]), index.get(chars[i + 1])]);
-    for (let i = samples.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [samples[i], samples[j]] = [samples[j], samples[i]]; }
-    let totalLoss = 0;
-    for (const [input, target] of samples) {
+    const sampleCount = chars.length - 1;
+    const model = {
+      id: randomUUID(), name: safeName(modelName), datasetId, datasetName: dataset.name, datasetSha256, datasetProvenance,
+      createdAt: new Date().toISOString(), trainedCharacters: chars.length, vocabulary, vocabularySize: v, hiddenSize: hSize,
+      architecture: "one-hot character → tanh hidden layer → softmax character", initialization: "Xavier uniform random initialization",
+      seed, epochs: 0, learningRate: LEARNING_RATE, trainingLoss: 0, kind: "mmd-char-mlp-v1",
+      inputWeights: Array.from(inputWeights), outputWeights: Array.from(outputWeights), hiddenBias: Array.from(hiddenBias), outputBias: Array.from(outputBias),
+      trainingState: { schemaVersion: 1, status: "paused", targetEpochs: trainingOptions.epochs, completedEpochs: 0, sampleCursor: 0, sampleCount, completedSteps: 0, totalSteps: sampleCount * trainingOptions.epochs, lossSum: 0, epochLosses: [], updatedAt: new Date().toISOString() }
+    };
+    await this.atomicWrite(path.join(this.modelsPath, model.id + ".json"), JSON.stringify(model));
+    return this.runTraining(model, dataset, trainingOptions.maxSteps);
+  }
+  async resume(modelId, options = {}) {
+    if (typeof modelId !== "string" || !idPattern.test(modelId)) throw new Error("Invalid model identifier.");
+    const { maxSteps } = this.normalizeTrainingOptions(options, false);
+    const modelPath = path.join(this.modelsPath, modelId + ".json");
+    const model = JSON.parse(await fs.readFile(modelPath, "utf8"));
+    const state = model.trainingState;
+    if (model.kind !== "mmd-char-mlp-v1" || !state || state.schemaVersion !== 1) throw new Error("This checkpoint does not contain resumable training state.");
+    if (state.status !== "paused") throw new Error("This model has no remaining training steps.");
+    if (typeof model.datasetId !== "string" || !idPattern.test(model.datasetId)) throw new Error("Checkpoint dataset identifier is invalid.");
+    const dataset = JSON.parse(await fs.readFile(path.join(this.datasetsPath, model.datasetId + ".json"), "utf8"));
+    if (!dataset || typeof dataset.text !== "string") throw new Error("The original training dataset is unavailable.");
+    const actualHash = createHash("sha256").update(dataset.text, "utf8").digest("hex");
+    if (actualHash !== model.datasetSha256 || (dataset.provenance?.schemaVersion >= 1 && dataset.provenance.contentSha256 !== actualHash)) throw new Error("The original training dataset no longer matches this checkpoint.");
+    return this.runTraining(model, dataset, maxSteps);
+  }
+  async runTraining(model, dataset, maxSteps) {
+    const chars = [...dataset.text].slice(0, MAX_TRAINING_CHARS);
+    const vocabulary = [...new Set(chars)];
+    const state = model.trainingState;
+    if (JSON.stringify(vocabulary) !== JSON.stringify(model.vocabulary) || state.sampleCount !== chars.length - 1) throw new Error("The training dataset no longer matches the checkpoint vocabulary or sample count.");
+    if (!Number.isInteger(state.targetEpochs) || state.targetEpochs < 1 || state.targetEpochs > MAX_TRAINING_EPOCHS || !Number.isInteger(state.completedEpochs) || state.completedEpochs < 0 || state.completedEpochs >= state.targetEpochs || !Number.isInteger(state.sampleCursor) || state.sampleCursor < 0 || state.sampleCursor >= state.sampleCount || state.completedSteps !== state.completedEpochs * state.sampleCount + state.sampleCursor) throw new Error("Checkpoint training progress is invalid.");
+    const v = model.vocabulary.length; const hSize = model.hiddenSize;
+    if (hSize !== HIDDEN_SIZE || model.inputWeights.length !== v * hSize || model.outputWeights.length !== hSize * v || model.hiddenBias.length !== hSize || model.outputBias.length !== v) throw new Error("Checkpoint tensor dimensions are invalid.");
+    const index = new Map(model.vocabulary.map((char, i) => [char, i]));
+    const samples = Array.from({ length: chars.length - 1 }, (_, i) => [index.get(chars[i]), index.get(chars[i + 1])]);
+    let epoch = state.completedEpochs;
+    let order = shuffledIndices(samples.length, (model.seed ^ Math.imul(epoch + 1, 0x9e3779b1)) >>> 0);
+    let stepsThisCall = 0;
+    while (stepsThisCall < maxSteps && state.completedEpochs < state.targetEpochs) {
+      if (epoch !== state.completedEpochs) {
+        epoch = state.completedEpochs;
+        order = shuffledIndices(samples.length, (model.seed ^ Math.imul(epoch + 1, 0x9e3779b1)) >>> 0);
+      }
+      const [input, target] = samples[order[state.sampleCursor]];
       const hidden = new Float64Array(hSize);
-      for (let h = 0; h < hSize; h++) hidden[h] = Math.tanh(hiddenBias[h] + inputWeights[input * hSize + h]);
+      for (let h = 0; h < hSize; h++) hidden[h] = Math.tanh(model.hiddenBias[h] + model.inputWeights[input * hSize + h]);
       const logits = new Float64Array(v); let max = -Infinity;
-      for (let k = 0; k < v; k++) { let z = outputBias[k]; for (let h = 0; h < hSize; h++) z += hidden[h] * outputWeights[h * v + k]; logits[k] = z; if (z > max) max = z; }
+      for (let k = 0; k < v; k++) { let z = model.outputBias[k]; for (let h = 0; h < hSize; h++) z += hidden[h] * model.outputWeights[h * v + k]; logits[k] = z; if (z > max) max = z; }
       const probabilities = new Float64Array(v); let sum = 0;
       for (let k = 0; k < v; k++) { probabilities[k] = Math.exp(logits[k] - max); sum += probabilities[k]; }
       for (let k = 0; k < v; k++) probabilities[k] /= sum;
-      totalLoss -= Math.log(Math.max(probabilities[target], 1e-12));
+      state.lossSum -= Math.log(Math.max(probabilities[target], 1e-12));
       const hiddenGradient = new Float64Array(hSize);
-      for (let h = 0; h < hSize; h++) for (let k = 0; k < v; k++) hiddenGradient[h] += outputWeights[h * v + k] * (probabilities[k] - (k === target ? 1 : 0));
-      for (let k = 0; k < v; k++) { const grad = probabilities[k] - (k === target ? 1 : 0); outputBias[k] -= LEARNING_RATE * grad; for (let h = 0; h < hSize; h++) outputWeights[h * v + k] -= LEARNING_RATE * grad * hidden[h]; }
-      for (let h = 0; h < hSize; h++) { const grad = hiddenGradient[h] * (1 - hidden[h] * hidden[h]); inputWeights[input * hSize + h] -= LEARNING_RATE * grad; hiddenBias[h] -= LEARNING_RATE * grad; }
+      for (let h = 0; h < hSize; h++) for (let k = 0; k < v; k++) hiddenGradient[h] += model.outputWeights[h * v + k] * (probabilities[k] - (k === target ? 1 : 0));
+      for (let k = 0; k < v; k++) { const grad = probabilities[k] - (k === target ? 1 : 0); model.outputBias[k] -= LEARNING_RATE * grad; for (let h = 0; h < hSize; h++) model.outputWeights[h * v + k] -= LEARNING_RATE * grad * hidden[h]; }
+      for (let h = 0; h < hSize; h++) { const grad = hiddenGradient[h] * (1 - hidden[h] * hidden[h]); model.inputWeights[input * hSize + h] -= LEARNING_RATE * grad; model.hiddenBias[h] -= LEARNING_RATE * grad; }
+      state.sampleCursor++; state.completedSteps++; stepsThisCall++;
+      if (state.sampleCursor === state.sampleCount) {
+        const epochLoss = state.lossSum / state.sampleCount;
+        state.epochLosses.push(epochLoss); state.completedEpochs++; state.sampleCursor = 0; state.lossSum = 0;
+        model.epochs = state.completedEpochs; model.trainingLoss = epochLoss;
+      }
+      if (stepsThisCall % 128 === 0) {
+        state.status = state.completedEpochs >= state.targetEpochs ? "completed" : "paused";
+        state.updatedAt = new Date().toISOString();
+        await this.atomicWrite(path.join(this.modelsPath, model.id + ".json"), JSON.stringify(model));
+      }
+      if (stepsThisCall % 64 === 0) await new Promise(resolve => setImmediate(resolve));
     }
-    const model = { id: randomUUID(), name: safeName(modelName), datasetId, datasetName: dataset.name, datasetSha256, datasetProvenance, createdAt: new Date().toISOString(), trainedCharacters: chars.length, vocabulary, vocabularySize: v, hiddenSize: hSize, architecture: "one-hot character → tanh hidden layer → softmax character", initialization: "Xavier uniform random initialization", seed, epochs: 1, learningRate: LEARNING_RATE, trainingLoss: totalLoss / samples.length, kind: "mmd-char-mlp-v1", inputWeights: Array.from(inputWeights), outputWeights: Array.from(outputWeights), hiddenBias: Array.from(hiddenBias), outputBias: Array.from(outputBias) };
+    state.status = state.completedEpochs >= state.targetEpochs ? "completed" : "paused";
+    model.epochs = state.completedEpochs;
+    model.trainingLoss = state.epochLosses.length ? state.epochLosses[state.epochLosses.length - 1] : state.lossSum / Math.max(1, state.sampleCursor);
+    state.updatedAt = new Date().toISOString();
     await this.atomicWrite(path.join(this.modelsPath, model.id + ".json"), JSON.stringify(model));
     return this.publicModel(model);
   }
@@ -153,7 +231,10 @@ class AiCore {
     for (let i = 0; i < limit; i++) { const result = forward(model, inputIndex, 0.85); inputIndex = sample(result.probabilities, random); output += model.vocabulary[inputIndex]; }
     return output;
   }
-  publicModel(m) { return { id: m.id, name: m.name, datasetName: m.datasetName, datasetSha256: m.datasetSha256 || "", datasetLicense: m.datasetProvenance?.license || "not-declared", datasetSourceReference: m.datasetProvenance?.sourceReference || "", createdAt: m.createdAt, trainedCharacters: m.trainedCharacters, vocabularySize: m.vocabularySize, hiddenSize: m.hiddenSize, architecture: m.architecture, initialization: m.initialization, seed: m.seed, epochs: m.epochs, learningRate: m.learningRate, trainingLoss: m.trainingLoss, kind: m.kind }; }
+  publicModel(m) {
+    const state = m.trainingState || null;
+    return { id: m.id, name: m.name, datasetName: m.datasetName, datasetSha256: m.datasetSha256 || "", datasetLicense: m.datasetProvenance?.license || "not-declared", datasetSourceReference: m.datasetProvenance?.sourceReference || "", createdAt: m.createdAt, trainedCharacters: m.trainedCharacters, vocabularySize: m.vocabularySize, hiddenSize: m.hiddenSize, architecture: m.architecture, initialization: m.initialization, seed: m.seed, epochs: m.epochs, learningRate: m.learningRate, trainingLoss: m.trainingLoss, kind: m.kind, trainingStatus: state?.status || "completed", completedSteps: state?.completedSteps ?? Math.max(0, (m.trainedCharacters || 1) - 1), totalSteps: state?.totalSteps ?? Math.max(0, (m.trainedCharacters || 1) - 1), targetEpochs: state?.targetEpochs ?? (m.epochs || 1), completedEpochs: state?.completedEpochs ?? (m.epochs || 1), sampleCursor: state?.sampleCursor ?? 0 };
+  }
   async atomicWrite(target, content) { const temp = target + ".tmp-" + randomUUID(); await fs.writeFile(temp, content, "utf8"); await fs.rename(temp, target); }
 }
-module.exports = { AiCore, seededRandom, forward, sample, safeName, MAX_DATASET_BYTES, MAX_TRAINING_CHARS, MAX_VOCABULARY, HIDDEN_SIZE };
+module.exports = { AiCore, seededRandom, forward, sample, safeName, MAX_DATASET_BYTES, MAX_TRAINING_CHARS, MAX_VOCABULARY, HIDDEN_SIZE, DEFAULT_TRAINING_CHUNK_STEPS, MAX_TRAINING_CHUNK_STEPS, MAX_TRAINING_EPOCHS };

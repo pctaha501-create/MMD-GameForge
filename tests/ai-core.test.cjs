@@ -101,3 +101,81 @@ test("dataset provenance input rejects invalid field types and oversized metadat
   await assert.rejects(core.importDataset(corpus, { license: 42 }), /Dataset license must be text/);
   await assert.rejects(core.importDataset(corpus, { notes: "x".repeat(1025) }), /Dataset notes cannot exceed 1024 characters/);
 });
+
+
+test("training checkpoints resume across runtime instances and complete the same dataset", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mmd-ai-resume-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const corpus = path.join(dir, "resume.txt");
+  await fs.writeFile(corpus, ("first party training must resume from its own saved random weights. ").repeat(80), "utf8");
+  const storage = path.join(dir, "runtime");
+  const core = new AiCore(storage); await core.initialize();
+  const dataset = await core.importDataset(corpus, { license: "CC0-1.0", sourceReference: "local-test-fixture" });
+  const first = await core.train(dataset.id, "Resumable model", { maxSteps: 37, epochs: 1 });
+  assert.equal(first.trainingStatus, "paused");
+  assert.equal(first.completedSteps, 37);
+  assert.ok(first.totalSteps > first.completedSteps);
+  const reloaded = new AiCore(storage);
+  const second = await reloaded.resume(first.id, { maxSteps: 41 });
+  assert.equal(second.trainingStatus, "paused");
+  assert.equal(second.completedSteps, 78);
+  let completed = second;
+  for (let attempt = 0; completed.trainingStatus === "paused" && attempt < 10; attempt++) completed = await reloaded.resume(first.id, { maxSteps: 4096 });
+  assert.equal(completed.trainingStatus, "completed");
+  assert.equal(completed.completedSteps, completed.totalSteps);
+  assert.equal(completed.completedEpochs, 1);
+  const saved = JSON.parse(await fs.readFile(path.join(reloaded.modelsPath, first.id + ".json"), "utf8"));
+  assert.equal(saved.trainingState.status, "completed");
+  assert.equal(saved.trainingState.epochLosses.length, 1);
+  assert.equal(saved.seed, first.seed);
+  assert.ok(saved.inputWeights.some(value => value !== 0));
+  assert.ok((await reloaded.generate(first.id, "first party ", 12)).length > 12);
+});
+
+test("resume refuses a dataset that changed after a partial checkpoint", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mmd-ai-resume-tamper-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const corpus = path.join(dir, "resume-tamper.txt");
+  await fs.writeFile(corpus, ("dataset lineage must remain stable for safe resume. ").repeat(50), "utf8");
+  const core = new AiCore(path.join(dir, "runtime")); await core.initialize();
+  const dataset = await core.importDataset(corpus, { license: "CC0-1.0" });
+  const model = await core.train(dataset.id, "Tamper guard", { maxSteps: 11 });
+  const recordPath = path.join(core.datasetsPath, dataset.id + ".json");
+  const record = JSON.parse(await fs.readFile(recordPath, "utf8")); record.text += "changed";
+  await fs.writeFile(recordPath, JSON.stringify(record), "utf8");
+  await assert.rejects(core.resume(model.id, { maxSteps: 11 }), /no longer matches this checkpoint/);
+});
+
+test("training chunk and epoch limits are validated and completed checkpoints cannot resume", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mmd-ai-resume-limits-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const corpus = path.join(dir, "limits.txt"); await fs.writeFile(corpus, ("bounded local training experiment. ").repeat(40), "utf8");
+  const core = new AiCore(path.join(dir, "runtime")); await core.initialize();
+  const dataset = await core.importDataset(corpus);
+  await assert.rejects(core.train(dataset.id, "Invalid chunk", { maxSteps: 0 }), /Training chunks/);
+  await assert.rejects(core.train(dataset.id, "Invalid epochs", { epochs: 11 }), /Training epochs/);
+  const model = await core.train(dataset.id, "Complete model", { maxSteps: 4096 });
+  assert.equal(model.trainingStatus, "completed");
+  await assert.rejects(core.resume(model.id), /no remaining training steps/);
+});
+
+
+test("periodic atomic checkpoints survive a simulated process interruption", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mmd-ai-crash-resume-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const corpus = path.join(dir, "crash.txt");
+  await fs.writeFile(corpus, ("atomic checkpoints keep first party model training recoverable. ").repeat(40), "utf8");
+  const storage = path.join(dir, "runtime"); const core = new AiCore(storage); await core.initialize();
+  const dataset = await core.importDataset(corpus, { license: "CC0-1.0" });
+  const atomicWrite = core.atomicWrite.bind(core); let writes = 0;
+  core.atomicWrite = async (target, content) => { await atomicWrite(target, content); writes++; if (writes === 2) throw new Error("simulated process interruption"); };
+  await assert.rejects(core.train(dataset.id, "Crash recovery", { maxSteps: 200 }), /simulated process interruption/);
+  const files = (await fs.readdir(core.modelsPath)).filter(file => file.endsWith(".json"));
+  assert.equal(files.length, 1);
+  const checkpoint = JSON.parse(await fs.readFile(path.join(core.modelsPath, files[0]), "utf8"));
+  assert.equal(checkpoint.trainingState.completedSteps, 128);
+  const recovered = new AiCore(storage);
+  const result = await recovered.resume(checkpoint.id, { maxSteps: 4096 });
+  assert.equal(result.trainingStatus, "completed");
+  assert.equal(result.completedSteps, result.totalSteps);
+});

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppInfo, DesktopAPI, ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings, AiStatus, AiDatasetInfo, AiModelInfo, AiDatasetProvenanceInput } from "../src/shared/types.js";
+import type { AppInfo, DesktopAPI, ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings, AiStatus, AiDatasetInfo, AiModelInfo, AiDatasetProvenanceInput, AiTrainingOptions } from "../src/shared/types.js";
 
 const api: DesktopAPI = {
   getAppInfo: () => ipcRenderer.invoke("app:get-info") as Promise<AppInfo>,
@@ -22,7 +22,8 @@ const api: DesktopAPI = {
   getAiStatus: () => ipcRenderer.invoke("ai:status") as Promise<AiStatus>,
   importAiDataset: (provenance) => ipcRenderer.invoke("ai:dataset:import", provenance) as Promise<AiDatasetInfo | null>,
   listAiDatasets: () => ipcRenderer.invoke("ai:datasets:list") as Promise<AiDatasetInfo[]>,
-  trainAiModel: (datasetId, modelName) => ipcRenderer.invoke("ai:model:train", datasetId, modelName) as Promise<AiModelInfo>,
+  trainAiModel: (datasetId, modelName, options) => ipcRenderer.invoke("ai:model:train", datasetId, modelName, options) as Promise<AiModelInfo>,
+  resumeAiTraining: (modelId, options) => ipcRenderer.invoke("ai:model:resume", modelId, options) as Promise<AiModelInfo>,
   listAiModels: () => ipcRenderer.invoke("ai:models:list") as Promise<AiModelInfo[]>,
   generateAiText: (modelId, prompt, maxCharacters) => ipcRenderer.invoke("ai:generate", modelId, prompt, maxCharacters) as Promise<string>,
 };

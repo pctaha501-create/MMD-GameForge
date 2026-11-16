@@ -39,7 +39,8 @@ export interface DesktopAPI {
   getAiStatus(): Promise<AiStatus>;
   importAiDataset(provenance?: AiDatasetProvenanceInput): Promise<AiDatasetInfo | null>;
   listAiDatasets(): Promise<AiDatasetInfo[]>;
-  trainAiModel(datasetId: string, modelName: string): Promise<AiModelInfo>;
+  trainAiModel(datasetId: string, modelName: string, options?: AiTrainingOptions): Promise<AiModelInfo>;
+  resumeAiTraining(modelId: string, options?: AiTrainingOptions): Promise<AiModelInfo>;
   listAiModels(): Promise<AiModelInfo[]>;
   generateAiText(modelId: string, prompt: string, maxCharacters: number): Promise<string>;
 }
@@ -57,5 +58,6 @@ export interface StudioSettings { editorFontSize?: number; wordWrap?: boolean; c
 export interface AiDatasetProvenanceInput { sourceReference?: string; license?: string; attribution?: string; notes?: string; }
 export interface AiDatasetProvenance { schemaVersion: number; sourceType: string; originalFileName: string; importedAt: string; encoding: string; normalization: string; sourceReference: string; license: string; attribution: string; notes: string; sourceSha256: string; contentSha256: string; }
 export interface AiDatasetInfo { id: string; name: string; bytes: number; characters: number; createdAt: string; provenance: AiDatasetProvenance; }
-export interface AiModelInfo { id: string; name: string; datasetName: string; datasetSha256: string; datasetLicense: string; datasetSourceReference: string; createdAt: string; trainedCharacters: number; vocabularySize: number; hiddenSize: number; architecture: string; initialization: string; seed: number; epochs: number; learningRate: number; trainingLoss: number; kind: string; }
+export interface AiTrainingOptions { maxSteps?: number; epochs?: number; }
+export interface AiModelInfo { id: string; name: string; datasetName: string; datasetSha256: string; datasetLicense: string; datasetSourceReference: string; createdAt: string; trainedCharacters: number; vocabularySize: number; hiddenSize: number; architecture: string; initialization: string; seed: number; epochs: number; learningRate: number; trainingLoss: number; kind: string; trainingStatus: "paused" | "completed"; completedSteps: number; totalSteps: number; targetEpochs: number; completedEpochs: number; sampleCursor: number; }
 export interface AiStatus { runtime: string; mode: "offline"; datasets: number; models: number; storagePath: string; modelKind: string; limitations: string[]; }

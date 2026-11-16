@@ -4,11 +4,11 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import projectNameRules = require("../src/shared/project-name.cjs");
-import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings, AiDatasetProvenanceInput } from "../src/shared/types.js";
+import type { ProjectSummary, ProjectFileNode, UnrealStatus, StudioSettings, AiDatasetProvenanceInput, AiTrainingOptions } from "../src/shared/types.js";
 
 const { validateProjectName } = projectNameRules;
 const isDevelopment = !app.isPackaged;
-const { AiCore } = require("./ai-core.cjs") as { AiCore: new (storagePath: string) => { initialize(): Promise<void>; status(): Promise<unknown>; importDataset(path: string, provenance?: AiDatasetProvenanceInput): Promise<unknown>; listDatasets(): Promise<unknown>; train(id: string, name: string): Promise<unknown>; listModels(): Promise<unknown>; generate(id: string, prompt: string, length: number): Promise<string> } };
+const { AiCore } = require("./ai-core.cjs") as { AiCore: new (storagePath: string) => { initialize(): Promise<void>; status(): Promise<unknown>; importDataset(path: string, provenance?: AiDatasetProvenanceInput): Promise<unknown>; listDatasets(): Promise<unknown>; train(id: string, name: string, options?: AiTrainingOptions): Promise<unknown>; resume(id: string, options?: AiTrainingOptions): Promise<unknown>; listModels(): Promise<unknown>; generate(id: string, prompt: string, length: number): Promise<string> } };
 const aiCore = new AiCore(path.join(app.getPath("userData"), "ai-core"));
 let mainWindow: BrowserWindow | null = null;
 
@@ -221,9 +221,13 @@ ipcMain.handle("ai:dataset:import", async (_event, provenance?: AiDatasetProvena
   return aiCore.importDataset(selected.filePaths[0], provenance);
 });
 ipcMain.handle("ai:datasets:list", () => aiCore.listDatasets());
-ipcMain.handle("ai:model:train", (_event, datasetId: unknown, modelName: unknown) => {
+ipcMain.handle("ai:model:train", (_event, datasetId: unknown, modelName: unknown, options?: AiTrainingOptions) => {
   if (typeof datasetId !== "string" || typeof modelName !== "string" || modelName.length > 128) throw new Error("Invalid training request.");
-  return aiCore.train(datasetId, modelName);
+  return aiCore.train(datasetId, modelName, options);
+});
+ipcMain.handle("ai:model:resume", (_event, modelId: unknown, options?: AiTrainingOptions) => {
+  if (typeof modelId !== "string") throw new Error("Invalid resume request.");
+  return aiCore.resume(modelId, options);
 });
 ipcMain.handle("ai:models:list", () => aiCore.listModels());
 ipcMain.handle("ai:generate", (_event, modelId: unknown, prompt: unknown, maxCharacters: unknown) => {
