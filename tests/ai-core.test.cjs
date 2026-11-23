@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
-const { AiCore, seededRandom, safeName, HIDDEN_SIZE } = require("../electron/ai-core.cjs");
+const { AiCore, seededRandom, safeName, evaluateSamples, HIDDEN_SIZE } = require("../electron/ai-core.cjs");
 
 test("AI research baseline imports, trains, persists, and generates locally", async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mmd-ai-"));
@@ -34,6 +34,10 @@ test("AI research baseline imports, trains, persists, and generates locally", as
   assert.equal(model.initialization, "Xavier uniform random initialization");
   assert.ok(Number.isInteger(model.seed));
   assert.ok(Number.isFinite(model.trainingLoss));
+  assert.equal(model.evaluation.status, "completed");
+  assert.equal(model.evaluation.splitMethod, "contiguous-80-10-10");
+  assert.ok(Number.isFinite(model.evaluation.validation.crossEntropy));
+  assert.ok(Number.isFinite(model.evaluation.test.perplexity));
   assert.ok(model.vocabularySize > 5);
   assert.equal((await core.listModels()).length, 1);
   const saved = JSON.parse(await fs.readFile(path.join(core.modelsPath, model.id + ".json"), "utf8"));
@@ -57,6 +61,39 @@ test("AI runtime rejects invalid IDs and undersized corpora", async (t) => {
   await assert.rejects(core.importDataset(corpus), /at least 40 characters/);
   await assert.rejects(core.train("not-an-id", "bad"), /Invalid dataset identifier/);
   await assert.rejects(core.generate("not-an-id", "x", 10), /Invalid model identifier/);
+});
+
+
+test("new training uses contiguous holdouts and persists validation/test metrics", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mmd-ai-evaluation-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const corpus = path.join(dir, "evaluation.txt");
+  await fs.writeFile(corpus, ("the quick brown fox jumps over the lazy dog. ").repeat(60), "utf8");
+  const core = new AiCore(path.join(dir, "runtime")); await core.initialize();
+  const dataset = await core.importDataset(corpus, { license: "CC0-1.0" });
+  const model = await core.train(dataset.id, "Evaluation model", { maxSteps: 4096, epochs: 1 });
+  assert.equal(model.trainingStatus, "completed");
+  assert.equal(model.evaluation.status, "completed");
+  const saved = JSON.parse(await fs.readFile(path.join(core.modelsPath, model.id + ".json"), "utf8"));
+  const datasetRecord = JSON.parse(await fs.readFile(path.join(core.datasetsPath, dataset.id + ".json"), "utf8"));
+  const totalSamples = [...datasetRecord.text].length - 1;
+  assert.equal(saved.trainingState.schemaVersion, 2);
+  assert.equal(saved.evaluationPlan.method, "contiguous-80-10-10");
+  assert.equal(saved.evaluationPlan.trainSamples, saved.trainingState.sampleCount);
+  assert.equal(saved.evaluationPlan.trainSamples + saved.evaluationPlan.validationSamples + saved.evaluationPlan.testSamples, totalSamples);
+  assert.equal(saved.evaluation.validation.samples, saved.evaluationPlan.validationSamples);
+  assert.equal(saved.evaluation.test.samples, saved.evaluationPlan.testSamples);
+  for (const metric of [saved.evaluation.train, saved.evaluation.validation, saved.evaluation.test]) {
+    assert.ok(Number.isFinite(metric.crossEntropy));
+    assert.ok(Number.isFinite(metric.perplexity) && metric.perplexity >= 1);
+    assert.ok(Number.isFinite(metric.accuracy) && metric.accuracy >= 0 && metric.accuracy <= 1);
+  }
+  const before = JSON.stringify(saved.inputWeights);
+  const measured = evaluateSamples(saved, [[0, 0]]);
+  assert.equal(measured.samples, 1);
+  assert.equal(JSON.stringify(saved.inputWeights), before, "evaluation must not update model weights");
+  const reloaded = new AiCore(path.join(dir, "runtime"));
+  assert.equal((await reloaded.listModels())[0].evaluation.status, "completed");
 });
 
 test("helper functions sanitize names and use weighted frequencies", () => {
@@ -127,6 +164,8 @@ test("training checkpoints resume across runtime instances and complete the same
   const saved = JSON.parse(await fs.readFile(path.join(reloaded.modelsPath, first.id + ".json"), "utf8"));
   assert.equal(saved.trainingState.status, "completed");
   assert.equal(saved.trainingState.epochLosses.length, 1);
+  assert.equal(saved.evaluation.status, "completed");
+  assert.equal(saved.evaluation.test.samples, saved.evaluationPlan.testSamples);
   assert.equal(saved.seed, first.seed);
   assert.ok(saved.inputWeights.some(value => value !== 0));
   assert.ok((await reloaded.generate(first.id, "first party ", 12)).length > 12);

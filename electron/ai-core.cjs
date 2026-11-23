@@ -41,6 +41,30 @@ function shuffledIndices(length, seed) {
   for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]]; }
   return indices;
 }
+function createEvaluationSplits(chars, index) {
+  const all = Array.from({ length: chars.length - 1 }, (_, i) => [index.get(chars[i]), index.get(chars[i + 1])]);
+  const trainEnd = Math.floor(all.length * 0.8);
+  const validationEnd = Math.floor(all.length * 0.9);
+  const train = all.slice(0, trainEnd);
+  const validation = all.slice(trainEnd, validationEnd);
+  const test = all.slice(validationEnd);
+  if (!train.length || !validation.length || !test.length) throw new Error("The dataset is too small for train/validation/test evaluation.");
+  return { train, validation, test, method: "contiguous-80-10-10" };
+}
+function evaluateSamples(model, samples) {
+  if (!Array.isArray(samples) || samples.length === 0) throw new Error("Evaluation requires at least one sample.");
+  let loss = 0;
+  let correct = 0;
+  for (const [input, target] of samples) {
+    const probabilities = forward(model, input, 1).probabilities;
+    loss -= Math.log(Math.max(probabilities[target], 1e-12));
+    let predicted = 0;
+    for (let i = 1; i < probabilities.length; i++) if (probabilities[i] > probabilities[predicted]) predicted = i;
+    if (predicted === target) correct++;
+  }
+  const crossEntropy = loss / samples.length;
+  return { samples: samples.length, crossEntropy, perplexity: Math.exp(crossEntropy), accuracy: correct / samples.length };
+}
 
 class AiCore {
   constructor(storagePath) { this.storagePath = storagePath; this.datasetsPath = path.join(storagePath, "datasets"); this.modelsPath = path.join(storagePath, "models"); }
@@ -137,14 +161,17 @@ class AiCore {
     const inputLimit = Math.sqrt(6 / (v + hSize)); const outputLimit = Math.sqrt(6 / (hSize + v));
     for (let i = 0; i < inputWeights.length; i++) inputWeights[i] = (random() * 2 - 1) * inputLimit;
     for (let i = 0; i < outputWeights.length; i++) outputWeights[i] = (random() * 2 - 1) * outputLimit;
-    const sampleCount = chars.length - 1;
+    const split = createEvaluationSplits(chars, index);
+    const sampleCount = split.train.length;
     const model = {
       id: randomUUID(), name: safeName(modelName), datasetId, datasetName: dataset.name, datasetSha256, datasetProvenance,
       createdAt: new Date().toISOString(), trainedCharacters: chars.length, vocabulary, vocabularySize: v, hiddenSize: hSize,
       architecture: "one-hot character → tanh hidden layer → softmax character", initialization: "Xavier uniform random initialization",
       seed, epochs: 0, learningRate: LEARNING_RATE, trainingLoss: 0, kind: "mmd-char-mlp-v1",
       inputWeights: Array.from(inputWeights), outputWeights: Array.from(outputWeights), hiddenBias: Array.from(hiddenBias), outputBias: Array.from(outputBias),
-      trainingState: { schemaVersion: 1, status: "paused", targetEpochs: trainingOptions.epochs, completedEpochs: 0, sampleCursor: 0, sampleCount, completedSteps: 0, totalSteps: sampleCount * trainingOptions.epochs, lossSum: 0, epochLosses: [], updatedAt: new Date().toISOString() }
+      evaluationPlan: { schemaVersion: 1, method: split.method, trainSamples: split.train.length, validationSamples: split.validation.length, testSamples: split.test.length },
+      evaluation: null,
+      trainingState: { schemaVersion: 2, status: "paused", targetEpochs: trainingOptions.epochs, completedEpochs: 0, sampleCursor: 0, sampleCount, completedSteps: 0, totalSteps: sampleCount * trainingOptions.epochs, lossSum: 0, epochLosses: [], updatedAt: new Date().toISOString() }
     };
     await this.atomicWrite(path.join(this.modelsPath, model.id + ".json"), JSON.stringify(model));
     return this.runTraining(model, dataset, trainingOptions.maxSteps);
@@ -155,7 +182,7 @@ class AiCore {
     const modelPath = path.join(this.modelsPath, modelId + ".json");
     const model = JSON.parse(await fs.readFile(modelPath, "utf8"));
     const state = model.trainingState;
-    if (model.kind !== "mmd-char-mlp-v1" || !state || state.schemaVersion !== 1) throw new Error("This checkpoint does not contain resumable training state.");
+    if (model.kind !== "mmd-char-mlp-v1" || !state || ![1, 2].includes(state.schemaVersion)) throw new Error("This checkpoint does not contain resumable training state.");
     if (state.status !== "paused") throw new Error("This model has no remaining training steps.");
     if (typeof model.datasetId !== "string" || !idPattern.test(model.datasetId)) throw new Error("Checkpoint dataset identifier is invalid.");
     const dataset = JSON.parse(await fs.readFile(path.join(this.datasetsPath, model.datasetId + ".json"), "utf8"));
@@ -168,12 +195,17 @@ class AiCore {
     const chars = [...dataset.text].slice(0, MAX_TRAINING_CHARS);
     const vocabulary = [...new Set(chars)];
     const state = model.trainingState;
-    if (JSON.stringify(vocabulary) !== JSON.stringify(model.vocabulary) || state.sampleCount !== chars.length - 1) throw new Error("The training dataset no longer matches the checkpoint vocabulary or sample count.");
-    if (!Number.isInteger(state.targetEpochs) || state.targetEpochs < 1 || state.targetEpochs > MAX_TRAINING_EPOCHS || !Number.isInteger(state.completedEpochs) || state.completedEpochs < 0 || state.completedEpochs >= state.targetEpochs || !Number.isInteger(state.sampleCursor) || state.sampleCursor < 0 || state.sampleCursor >= state.sampleCount || state.completedSteps !== state.completedEpochs * state.sampleCount + state.sampleCursor) throw new Error("Checkpoint training progress is invalid.");
+    if (JSON.stringify(vocabulary) !== JSON.stringify(model.vocabulary) || ![1, 2].includes(state.schemaVersion)) throw new Error("The training dataset no longer matches the checkpoint vocabulary or schema.");
     const v = model.vocabulary.length; const hSize = model.hiddenSize;
     if (hSize !== HIDDEN_SIZE || model.inputWeights.length !== v * hSize || model.outputWeights.length !== hSize * v || model.hiddenBias.length !== hSize || model.outputBias.length !== v) throw new Error("Checkpoint tensor dimensions are invalid.");
     const index = new Map(model.vocabulary.map((char, i) => [char, i]));
-    const samples = Array.from({ length: chars.length - 1 }, (_, i) => [index.get(chars[i]), index.get(chars[i + 1])]);
+    const split = createEvaluationSplits(chars, index);
+    const allSamples = Array.from({ length: chars.length - 1 }, (_, i) => [index.get(chars[i]), index.get(chars[i + 1])]);
+    const legacyTraining = state.schemaVersion === 1;
+    const samples = legacyTraining ? allSamples : split.train;
+    if (state.sampleCount !== samples.length) throw new Error("The training dataset no longer matches the checkpoint sample count.");
+    if (!legacyTraining && (!model.evaluationPlan || model.evaluationPlan.method !== split.method || model.evaluationPlan.trainSamples !== split.train.length || model.evaluationPlan.validationSamples !== split.validation.length || model.evaluationPlan.testSamples !== split.test.length)) throw new Error("Checkpoint evaluation split metadata is invalid.");
+    if (!Number.isInteger(state.targetEpochs) || state.targetEpochs < 1 || state.targetEpochs > MAX_TRAINING_EPOCHS || !Number.isInteger(state.completedEpochs) || state.completedEpochs < 0 || state.completedEpochs >= state.targetEpochs || !Number.isInteger(state.sampleCursor) || state.sampleCursor < 0 || state.sampleCursor >= state.sampleCount || state.completedSteps !== state.completedEpochs * state.sampleCount + state.sampleCursor) throw new Error("Checkpoint training progress is invalid.");
     let epoch = state.completedEpochs;
     let order = shuffledIndices(samples.length, (model.seed ^ Math.imul(epoch + 1, 0x9e3779b1)) >>> 0);
     let stepsThisCall = 0;
@@ -211,6 +243,21 @@ class AiCore {
     state.status = state.completedEpochs >= state.targetEpochs ? "completed" : "paused";
     model.epochs = state.completedEpochs;
     model.trainingLoss = state.epochLosses.length ? state.epochLosses[state.epochLosses.length - 1] : state.lossSum / Math.max(1, state.sampleCursor);
+    if (state.status === "completed") {
+      if (legacyTraining) {
+        model.evaluation = { schemaVersion: 1, status: "not-evaluated", splitMethod: "none", reason: "Legacy checkpoint training included the full corpus, so a leakage-free holdout score cannot be reconstructed." };
+      } else {
+        model.evaluation = {
+          schemaVersion: 1,
+          status: "completed",
+          splitMethod: split.method,
+          train: evaluateSamples(model, split.train),
+          validation: evaluateSamples(model, split.validation),
+          test: evaluateSamples(model, split.test),
+          evaluatedAt: new Date().toISOString()
+        };
+      }
+    }
     state.updatedAt = new Date().toISOString();
     await this.atomicWrite(path.join(this.modelsPath, model.id + ".json"), JSON.stringify(model));
     return this.publicModel(model);
@@ -233,8 +280,8 @@ class AiCore {
   }
   publicModel(m) {
     const state = m.trainingState || null;
-    return { id: m.id, name: m.name, datasetName: m.datasetName, datasetSha256: m.datasetSha256 || "", datasetLicense: m.datasetProvenance?.license || "not-declared", datasetSourceReference: m.datasetProvenance?.sourceReference || "", createdAt: m.createdAt, trainedCharacters: m.trainedCharacters, vocabularySize: m.vocabularySize, hiddenSize: m.hiddenSize, architecture: m.architecture, initialization: m.initialization, seed: m.seed, epochs: m.epochs, learningRate: m.learningRate, trainingLoss: m.trainingLoss, kind: m.kind, trainingStatus: state?.status || "completed", completedSteps: state?.completedSteps ?? Math.max(0, (m.trainedCharacters || 1) - 1), totalSteps: state?.totalSteps ?? Math.max(0, (m.trainedCharacters || 1) - 1), targetEpochs: state?.targetEpochs ?? (m.epochs || 1), completedEpochs: state?.completedEpochs ?? (m.epochs || 1), sampleCursor: state?.sampleCursor ?? 0 };
+    return { id: m.id, name: m.name, datasetName: m.datasetName, datasetSha256: m.datasetSha256 || "", datasetLicense: m.datasetProvenance?.license || "not-declared", datasetSourceReference: m.datasetProvenance?.sourceReference || "", createdAt: m.createdAt, trainedCharacters: m.trainedCharacters, vocabularySize: m.vocabularySize, hiddenSize: m.hiddenSize, architecture: m.architecture, initialization: m.initialization, seed: m.seed, epochs: m.epochs, learningRate: m.learningRate, trainingLoss: m.trainingLoss, kind: m.kind, trainingStatus: state?.status || "completed", completedSteps: state?.completedSteps ?? Math.max(0, (m.trainedCharacters || 1) - 1), totalSteps: state?.totalSteps ?? Math.max(0, (m.trainedCharacters || 1) - 1), targetEpochs: state?.targetEpochs ?? (m.epochs || 1), completedEpochs: state?.completedEpochs ?? (m.epochs || 1), sampleCursor: state?.sampleCursor ?? 0, evaluation: m.evaluation || null };
   }
   async atomicWrite(target, content) { const temp = target + ".tmp-" + randomUUID(); await fs.writeFile(temp, content, "utf8"); await fs.rename(temp, target); }
 }
-module.exports = { AiCore, seededRandom, forward, sample, safeName, MAX_DATASET_BYTES, MAX_TRAINING_CHARS, MAX_VOCABULARY, HIDDEN_SIZE, DEFAULT_TRAINING_CHUNK_STEPS, MAX_TRAINING_CHUNK_STEPS, MAX_TRAINING_EPOCHS };
+module.exports = { AiCore, seededRandom, forward, sample, evaluateSamples, createEvaluationSplits, safeName, MAX_DATASET_BYTES, MAX_TRAINING_CHARS, MAX_VOCABULARY, HIDDEN_SIZE, DEFAULT_TRAINING_CHUNK_STEPS, MAX_TRAINING_CHUNK_STEPS, MAX_TRAINING_EPOCHS };
